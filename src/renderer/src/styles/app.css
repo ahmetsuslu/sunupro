@@ -100,6 +100,14 @@ kbd {
   border-color: color-mix(in srgb, var(--warn) 45%, transparent);
   background: transparent;
 }
+/* Prova: ders sırasında karışmasın diye belirgin */
+.chip--rehearsal {
+  color: #1b1300;
+  background: var(--warn);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
 .chip--btn {
   cursor: pointer;
 }

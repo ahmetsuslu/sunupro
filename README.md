@@ -50,6 +50,9 @@ PowerPoint'in sunucu görünümünde ders anlatırken eksik kalan noktalar için
   ders saatleri, günler ve sınıflar (ad + renk; ön lisans, lisans, tıp şablonları) özelleştirilebilir.
   Dersler sol menüde günlere göre, saat sırasıyla listelenir; ana sayfadaki **Bugün** bölümü bugünün
   derslerini ve her dersin sıradaki sunusunu tek tıkla başlatılacak şekilde öne çıkarır.
+- **Prova:** derse girmeden önce sunuyu evde çalışmak için "Prova" ile aç; gösteri, notlar, süre ve
+  işaretçiler aynen çalışır ama kaldığın yer ve "sunuldu" işareti değişmez, provadaki çizimler saklanmaz.
+  Sunucu ekranında PROVA rozeti görünür.
 - **Sunuldu takibi:** son slayta gelinen sunu kendiliğinden "sunuldu" olarak işaretlenir; ✓ ile elle
   işaretlenir ya da kaldırılır (Shift+✓ üsttekilerle birlikte işaretler). Derste sıradaki sunu vurgulanır.
 - **Ara modu (`A`):** projeksiyonda geri sayım ve dönüş saati, süre sayacı durur. Sunum boyunca ekran

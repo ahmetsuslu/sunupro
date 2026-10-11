@@ -119,7 +119,7 @@ function cacheKeyFor(path: string): string {
   return createHash('sha1').update(`${path.toLowerCase()}|${st.size}|${st.mtimeMs}`).digest('hex').slice(0, 16)
 }
 
-type OpenResult = Omit<PresentationInfo, 'name' | 'cacheKey' | 'session'>
+type OpenResult = Omit<PresentationInfo, 'name' | 'cacheKey' | 'session' | 'rehearsal'>
 
 /** Dosyanın slayt görselleri güncel biçimde önbellekte mi (sunu açılmadan, dosya bilgisinden) */
 export function isPrepared(path: string): boolean {
@@ -169,8 +169,9 @@ class ShowController {
     this.state = next
     const keys: (keyof ShowState)[] = ['running', 'slide', 'click', 'clickCount', 'state', 'detached', 'atEnd']
     if (force || keys.some((k) => prev[k] !== next[k])) this.broadcast('show:state', next)
-    // Kaldığın yerden devam: her konum değişimi kaydedilir (ara verip kapatınca kaybolmasın)
-    if (next.running && next.slide && this.presentation) {
+    // Kaldığın yerden devam: her konum değişimi kaydedilir (ara verip kapatınca kaybolmasın).
+    // Provada (evde çalışırken) ne kaldığın yer ne de sunuldu işareti değişir.
+    if (next.running && next.slide && this.presentation && !this.presentation.rehearsal) {
       saveSession(this.presentation.path, {
         slide: next.slide,
         click: next.click ?? 0,
@@ -184,7 +185,7 @@ class ShowController {
 
   // ---------- Dosya hazırlama ----------
 
-  async open(path: string): Promise<PresentationInfo> {
+  async open(path: string, opts: { rehearsal?: boolean } = {}): Promise<PresentationInfo> {
     preflight(path)
     if (this.state.running) await this.stop()
     await this.hooks.beforeOpen()
@@ -197,7 +198,8 @@ class ShowController {
       name: basename(path),
       cacheKey,
       openedCopy: !!info.openedCopy,
-      session: getSession(path)
+      session: getSession(path),
+      rehearsal: !!opts.rehearsal
     }
     return this.presentation
   }
@@ -565,7 +567,7 @@ export function registerShow(getMain: () => BrowserWindow | null): void {
     })
     return res.canceled ? null : res.filePaths[0]
   })
-  ipcMain.handle('show:open', (_e, path: string) => toResult(() => show.open(path)))
+  ipcMain.handle('show:open', (_e, path: string, opts?: { rehearsal?: boolean }) => toResult(() => show.open(path, opts)))
   ipcMain.handle('show:start', (_e, opts) => toResult(() => show.start(opts ?? {})))
   ipcMain.handle('show:cmd', (_e, cmd, args) => show.command(cmd, args))
   ipcMain.handle('show:stop', () => show.stop())

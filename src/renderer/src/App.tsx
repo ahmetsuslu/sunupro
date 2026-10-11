@@ -36,11 +36,11 @@ function Shell(): React.JSX.Element {
   useEffect(() => window.api.show.onExportProgress((progress) => setOpening((o) => (o ? { ...o, progress } : o))), [])
 
   const open = useCallback(
-    async (path: string) => {
+    async (path: string, opts?: { rehearsal?: boolean }) => {
       if (opening) return
       setError(null)
       setOpening({ name: path.split(/[\\/]/).pop() ?? path, progress: null })
-      const r = await window.api.show.open(path)
+      const r = await window.api.show.open(path, opts)
       setOpening(null)
       if (r.ok) setPresentation(r.value)
       else setError(r.message)

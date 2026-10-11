@@ -25,6 +25,8 @@ export type PresentationInfo = {
   openedCopy: boolean
   /** Bu sunuda en son kalınan yer (yoksa null) */
   session: FileSession | null
+  /** Prova: sunu oynatılır ama kaldığın yer ve sunuldu işareti değişmez, çizimler saklanmaz */
+  rehearsal: boolean
 }
 
 /** Kaldığın yerden devam: dosya başına son konum */

@@ -22,7 +22,9 @@ ipcRenderer.on('audience:config', (_e, config: AudienceConfig) => {
 const api = {
   show: {
     pickFile: (): Promise<string | null> => ipcRenderer.invoke('show:pick-file'),
-    open: (path: string): Promise<Result<PresentationInfo>> => ipcRenderer.invoke('show:open', path),
+    /** rehearsal: prova — kaldığın yer ve sunuldu işareti değişmez */
+    open: (path: string, opts?: { rehearsal?: boolean }): Promise<Result<PresentationInfo>> =>
+      ipcRenderer.invoke('show:open', path, opts),
     start: (opts?: { slide?: number; click?: number; mode?: ShowMode }): Promise<Result<ShowState>> =>
       ipcRenderer.invoke('show:start', opts),
     cmd: (cmd: ShowCmd, args?: Record<string, unknown>): Promise<ShowState> => ipcRenderer.invoke('show:cmd', cmd, args),

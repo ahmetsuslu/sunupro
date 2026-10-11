@@ -21,12 +21,17 @@ import {
 } from '../lib/schedule'
 
 type Props = {
-  onOpen: (path: string) => void
+  onOpen: OpenFn
   onSettings: () => void
   /** Açılış hatası (Shell'den) */
   error: string | null
   onDismissError: () => void
 }
+
+/** Sunuyu aç; rehearsal: prova (kaldığın yer ve sunuldu işareti değişmez) */
+type OpenFn = (path: string, opts?: { rehearsal?: boolean }) => void
+
+const REHEARSAL_TITLE = 'Prova: evde çalışmak için oynat — kaldığın yer ve sunuldu işareti değişmez'
 
 type Dialog =
   | { kind: 'create' }
@@ -284,6 +289,17 @@ export default function Library({ onOpen, onSettings, error, onDismissError }: P
                     actions={
                       <>
                         <button
+                          className="icon-btn rehearsal-btn"
+                          title={REHEARSAL_TITLE}
+                          disabled={f.status === 'missing'}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            onOpen(f.path, { rehearsal: true })
+                          }}
+                        >
+                          Prova
+                        </button>
+                        <button
                           className={`icon-btn ${f.presentedAt ? 'icon-btn--done' : ''}`}
                           aria-pressed={!!f.presentedAt}
                           title={
@@ -392,7 +408,7 @@ function TodayPanel({
 }: {
   view: LibraryView
   now: Date
-  onOpen: (path: string) => void
+  onOpen: OpenFn
   onCourse: (id: string) => void
 }): React.JSX.Element | null {
   const today = todayEntries(view, now)
@@ -420,15 +436,27 @@ function TodayPanel({
             {nextFile && <span className="hint"> — {stripExt(nextFile.name)}</span>}
           </span>
           {nextFile && (
-            <button
-              className="btn"
-              onClick={(ev) => {
-                ev.stopPropagation()
-                onOpen(nextFile.path)
-              }}
-            >
-              ▶ Aç
-            </button>
+            <>
+              <button
+                className="btn"
+                title={REHEARSAL_TITLE}
+                onClick={(ev) => {
+                  ev.stopPropagation()
+                  onOpen(nextFile.path, { rehearsal: true })
+                }}
+              >
+                Prova
+              </button>
+              <button
+                className="btn"
+                onClick={(ev) => {
+                  ev.stopPropagation()
+                  onOpen(nextFile.path)
+                }}
+              >
+                ▶ Aç
+              </button>
+            </>
           )}
         </div>
       )}
@@ -446,7 +474,7 @@ function TodayCard({
 }: {
   entry: TodayEntry
   view: LibraryView
-  onOpen: (path: string) => void
+  onOpen: OpenFn
   onCourse: (id: string) => void
 }): React.JSX.Element {
   const { course, slot, state, start, end } = entry
@@ -492,15 +520,27 @@ function TodayCard({
         </div>
       </div>
       {file && (
-        <button
-          className={`btn btn--lg ${active ? 'btn--primary' : ''}`}
-          onClick={(ev) => {
-            ev.stopPropagation()
-            onOpen(file.path)
-          }}
-        >
-          ▶ Başlat
-        </button>
+        <div className="today-card__actions">
+          <button
+            className="btn btn--lg"
+            title={REHEARSAL_TITLE}
+            onClick={(ev) => {
+              ev.stopPropagation()
+              onOpen(file.path, { rehearsal: true })
+            }}
+          >
+            Prova
+          </button>
+          <button
+            className={`btn btn--lg ${active ? 'btn--primary' : ''}`}
+            onClick={(ev) => {
+              ev.stopPropagation()
+              onOpen(file.path)
+            }}
+          >
+            ▶ Başlat
+          </button>
+        </div>
       )}
     </div>
   )

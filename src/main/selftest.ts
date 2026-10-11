@@ -643,6 +643,41 @@ Start-Sleep -Milliseconds 150; [void][M]::SetCursorPos($old.X, $old.Y)`
       )
     )
     await shot('t2-bugun', 'presenter')
+
+    // Prova: Bugün kartından provaya aç, son slayta git → kaldığın yer ve sunuldu işareti değişmemeli
+    const hafta2 = async (): Promise<View['courses'][number]['items'][number] | undefined> =>
+      (await js<View>(`window.api.library.get()`)).courses[0].items.find((i) => i.name === 'Hafta 2.pptx')
+    const h2Before = await hafta2()
+    await js(`[...document.querySelectorAll('.today-card--now button')].find((b) => b.textContent === 'Prova').click()`)
+    await waitFor(() => show.presentation?.name === 'Hafta 2.pptx', 15000)
+    await sleep(800)
+    check(
+      'Prova → sunucu ekranında PROVA rozeti, devam önerisi yok',
+      show.presentation?.rehearsal === true &&
+        (await js<boolean>(`!!document.querySelector('.chip--rehearsal') && !document.body.innerText.includes('üzerinde kalmıştın')`))
+    )
+    main.focus()
+    press(main, 'F5')
+    await waitFor(() => show.state.running, 10000)
+    await sleep(800)
+    const last = show.presentation?.lastVisible
+    press(main, 'End')
+    await waitFor(() => show.state.slide === last, 5000)
+    await sleep(400)
+    const rehearsalSlide = show.state.slide
+    await shot('t3-prova', 'presenter')
+    await show.stop()
+    await sleep(400)
+    await js(`document.querySelector('button[title="Sunuyu kapat"]')?.click()`)
+    await waitFor(() => !show.presentation, 5000)
+    await sleep(600)
+    const h2After = await hafta2()
+    check(
+      'provada son slayta gelindi ama sunuldu / kaldığın yer değişmedi',
+      rehearsalSlide === last && h2After?.presentedAt == null && JSON.stringify(h2After?.session) === JSON.stringify(h2Before?.session),
+      { rehearsalSlide, last, before: h2Before, after: h2After }
+    )
+
     await setNow('new Date(2026, 9, 11, 15, 0).getTime()') // Pazar
     await sleep(300)
     const sunday = await js<{ empty: boolean; next?: string }>(

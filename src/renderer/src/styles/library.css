@@ -639,6 +639,14 @@ button.chip {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.today-card__actions {
+  display: flex;
+  gap: 8px;
+}
+.file-row__actions .rehearsal-btn {
+  font-size: 13px;
+  padding: 0 12px;
+}
 .today-card__file strong {
   color: var(--text-primary);
   font-weight: 600;

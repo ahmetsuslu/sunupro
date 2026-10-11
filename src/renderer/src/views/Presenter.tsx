@@ -35,10 +35,14 @@ const DEFAULT_INK: InkPrefs = {
 }
 
 export default function Presenter({ presentation: p, onClose, onSettings, inputBlocked }: Props): React.JSX.Element {
-  // Kaldığın yerden devam: dosyanın son konumu (baştaysa sormaya gerek yok)
+  // Kaldığın yerden devam: dosyanın son konumu (baştaysa sormaya gerek yok). Prova baştan başlar.
   const session = p.session
   const resumable =
-    !!session && session.slide >= 1 && session.slide <= p.slideCount && (session.slide !== firstVisible(p) || session.click > 0)
+    !p.rehearsal &&
+    !!session &&
+    session.slide >= 1 &&
+    session.slide <= p.slideCount &&
+    (session.slide !== firstVisible(p) || session.click > 0)
   const [resumeOpen, setResumeOpen] = useState(resumable)
   const [state, setState] = useState<ShowState>({ running: false })
   const [previewSlide, setPreviewSlide] = useState(() => (resumable ? session!.slide : firstVisible(p)))
@@ -107,8 +111,9 @@ export default function Presenter({ presentation: p, onClose, onSettings, inputB
     }
   }, [zoom])
 
-  // Çizimleri dosya bazında saklama (ayar açıksa): açılışta yükle, değişince kısa gecikmeyle kaydet
-  const rememberInk = settings?.rememberInk ?? false
+  // Çizimleri dosya bazında saklama (ayar açıksa): açılışta yükle, değişince kısa gecikmeyle kaydet.
+  // Provadaki çizimler ders çizimlerine karışmasın: provada ne yüklenir ne kaydedilir.
+  const rememberInk = !p.rehearsal && (settings?.rememberInk ?? false)
   const inkLoaded = useRef(false)
   useEffect(() => {
     if (!rememberInk || inkLoaded.current) return
@@ -345,6 +350,11 @@ export default function Presenter({ presentation: p, onClose, onSettings, inputB
         <strong className="presenter__name" title={p.path}>
           {p.name}
         </strong>
+        {p.rehearsal && (
+          <span className="chip chip--rehearsal" title="Prova: kaldığın yer ve sunuldu işareti değişmez, çizimler saklanmaz">
+            Prova
+          </span>
+        )}
         <span className="chip">
           Slayt {slide} / {p.slideCount}
         </span>
