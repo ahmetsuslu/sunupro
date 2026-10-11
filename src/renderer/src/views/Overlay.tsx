@@ -184,22 +184,44 @@ function ZoomMirror({ hub, rect, aspect }: { hub: ViewHub; rect: Rect; aspect: n
         })
     }
 
+    // Yakınlaştırma bitince yakalama birkaç saniye sonra kapatılır (gereksiz yük olmasın); bir sonraki
+    // yakınlaştırmada yeniden başlar (yaklaşık 0,5 sn sonra projeksiyona yansır)
+    let idleTimer: number | undefined
+    const stop = (): void => {
+      stream?.getTracks().forEach((t) => t.stop())
+      stream = null
+      video.srcObject = null
+      startedRef.current = false
+      if (hub.mirrorReady) {
+        hub.mirrorReady = false
+        hub.emit()
+      }
+    }
+
     const offView = hub.subscribe(place)
     // Yakalamayı istenen görünüme göre başlat (etkin görünüm yakalama hazır olana dek 1'de kalır)
     const offReq = (() => {
       const check = (): void => {
-        if (isZoomed(hub.requested)) start()
+        if (isZoomed(hub.requested)) {
+          window.clearTimeout(idleTimer)
+          idleTimer = undefined
+          start()
+        } else if (startedRef.current && idleTimer === undefined) {
+          idleTimer = window.setTimeout(() => {
+            idleTimer = undefined
+            if (!isZoomed(hub.requested)) stop()
+          }, 4000)
+        }
       }
       check()
       return onOverlayMessage((m) => m.t === 'view' && check())
     })()
     return () => {
       cancelled = true
+      window.clearTimeout(idleTimer)
       offView()
       offReq()
-      stream?.getTracks().forEach((t) => t.stop())
-      hub.mirrorReady = false
-      startedRef.current = false
+      stop()
     }
   }, [hub, rect.width, rect.height, aspect])
 

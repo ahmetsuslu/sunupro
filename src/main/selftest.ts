@@ -1,7 +1,8 @@
 import { app, BrowserWindow, desktopCapturer, powerMonitor, screen, type Display } from 'electron'
-import { execFileSync, spawn } from 'child_process'
+import { execFileSync } from 'child_process'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs'
 import { join } from 'path'
+import { cpus } from 'os'
 import { ppt } from './pptctl'
 import { cacheRoot, friendlyError, show } from './show'
 import { physicalCenter } from './displays'
@@ -109,6 +110,15 @@ export async function runSelfTest(main: BrowserWindow, outDir: string): Promise<
     await waitFor(() => show.state.running)
     check('F5 → canlı gösteri başladı', show.state.running && show.state.mode === 'live', show.state)
     await sleep(1500)
+    // Boşta gösteri sırasında işlemci yükü (Sunu Pro'nun tüm Electron süreçleri, tek çekirdeğe göre %)
+    app.getAppMetrics() // ölçümü başlat
+    await sleep(4000)
+    const cpu = app.getAppMetrics().reduce((sum, m) => sum + m.cpu.percentCPUUsage, 0)
+    check('gösteri boştayken işlemci yükü düşük (< %25 tek çekirdek)', cpu < 25, {
+      cpuTekCekirdek: Math.round(cpu * 10) / 10,
+      cekirdek: cpus().length,
+      toplamYuzde: Math.round((cpu / cpus().length) * 10) / 10
+    })
     press(main, 'Right')
     // Geçiş bitip adım sayısı okunana dek bekle (geçiş sırasındaki ileri, geçişi tamamlamaya harcanır)
     await waitFor(() => show.state.slide === 2 && (show.state.clickCount ?? 0) > 0)
@@ -494,95 +504,25 @@ Start-Sleep -Milliseconds 150; [void][M]::SetCursorPos($old.X, $old.Y)`
     check('devam → kalınan slayttan başladı', show.state.slide === sess?.slide, { state: show.state.slide, sess })
 
     main.focus()
+    const locksAtStart = breakLock.requests
     press(main, 'A')
     await sleep(800)
     check('A → ara modu (sunucuda şerit)', await js<boolean>(`!!document.querySelector('.banner--break')`))
 
-    // Ara kilidi (kuru çalıştırma: gerçek Windows kilidi yerine yalnızca bildirir)
-    check('arada kilit ekranı açıldı (tam ekran, en üstte)', (await js<boolean>(`!!document.querySelector('.lock-screen')`)) && main.isKiosk())
-    await waitFor(() => breakLock.get().hello !== null, 10_000)
-    check('Windows Hello (parmak izi) hazır', breakLock.get().hello === 'Available', breakLock.get())
+    // Ara kilidi: Windows'un kendi kilidi istenir (kuru çalıştırma: gerçek kilit yerine yalnızca sayılır).
+    // Uygulama tam ekran/en üst kilit penceresine geçmez, ek gözcü süreci yoktur.
+    await waitFor(() => breakLock.requests > locksAtStart, 3000)
+    check('A → Windows kilidi istendi', breakLock.requests === locksAtStart + 1, { requests: breakLock.requests })
+    check('uygulama kendi kilit penceresine geçmez (kiosk yok)', !main.isKiosk())
     await sleep(600)
     await shot('h2-ara-seyirci', 'audience')
-    await shot('h2-kilit-sunucu', 'presenter')
-    // Klavye engeli: kilitliyken Alt+Tab (pencere önizlemeleri) ve Windows tuşu hiçbir şey açmamalı
-    breakLock.blockedKeys.length = 0
-    runPs(
-      outDir,
-      'tuslar.ps1',
-      `Add-Type -TypeDefinition @"
-using System; using System.Runtime.InteropServices;
-public static class K { [DllImport("user32.dll")] public static extern void keybd_event(byte vk, byte s, uint f, UIntPtr e); }
-"@
-[K]::keybd_event(0x12, 0, 0, [UIntPtr]::Zero); [K]::keybd_event(0x09, 0, 0, [UIntPtr]::Zero)
-Start-Sleep -Milliseconds 400
-[K]::keybd_event(0x09, 0, 2, [UIntPtr]::Zero); [K]::keybd_event(0x12, 0, 2, [UIntPtr]::Zero)
-Start-Sleep -Milliseconds 300
-[K]::keybd_event(0x5B, 0, 0, [UIntPtr]::Zero); [K]::keybd_event(0x5B, 0, 2, [UIntPtr]::Zero)`
-    )
-    await sleep(1200)
-    check(
-      'kilitliyken Alt+Tab ve Windows tuşu engellenir (önizleme/Başlat açılmaz)',
-      breakLock.blockedKeys.includes('Alt+Tab') && breakLock.blockedKeys.includes('Windows') && !breakLock.get().windowsLocked,
-      { blocked: breakLock.blockedKeys, state: breakLock.get() }
-    )
-    // "Parmak iziyle aç": Windows Hello penceresi kilit penceresinin üstünde ve odaklı açılmalı
-    // (odakta değilse parmak izi okunmaz). Test isteği iptal eder; kilit sürer.
-    void js(`document.querySelector('.lock-screen__btn').click()`)
-    await sleep(2500)
-    const helloFg = runPs(
-      outDir,
-      'onplan.ps1',
-      `Add-Type -TypeDefinition @"
-using System; using System.Runtime.InteropServices;
-public static class F { [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow(); [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr h, out uint p); }
-"@
-$p = 0; [void][F]::GetWindowThreadProcessId([F]::GetForegroundWindow(), [ref]$p); (Get-Process -Id $p).ProcessName`
-    )
-    await shot('h3-parmak-izi-istemi', 'presenter')
-    check('Parmak iziyle aç → Windows Hello penceresi öne gelir (odakta)', helloFg === 'CredentialUIBroker', helloFg)
-    breakLock.cancelVerify()
-    for (let i = 0; i < 30 && !(await js<boolean>(`!!document.querySelector('.lock-screen__status')`)); i++) await sleep(200)
-    await waitFor(() => breakLock.lastVerifyResult !== null, 4000)
-    // Test sırasında biri gerçekten parmak izini okutursa sonuç "Verified" olur ve kilit açılır; o da doğru
-    const verifyOutcome = breakLock.lastVerifyResult
-    check(
-      'Windows Hello sonucu uygulamaya ulaşır (iptal → kilit sürer + bilgi; parmak izi → açılır)',
-      verifyOutcome === 'Verified'
-        ? !breakLock.get().locked
-        : verifyOutcome === 'Canceled' && breakLock.get().locked && (await js<boolean>(`!!document.querySelector('.lock-screen__status')`)),
-      { verifyOutcome, state: breakLock.get() }
-    )
-    // Kilit doğru açılınca (parmak izi doğrulandı) gözcü kapanırken Windows'u kilitlememeli
-    const locksBefore = breakLock.guardLocks
-    if (breakLock.get().locked) breakLock.unlock('selftest')
-    await sleep(1500)
-    check('kilit doğru açılınca Windows kilidi devreye girmez', breakLock.guardLocks === locksBefore && !breakLock.get().locked, {
-      locksBefore,
-      after: breakLock.guardLocks
-    })
-    breakLock.lock()
-    await waitFor(() => breakLock.get().hello !== null, 10_000)
-    main.focus()
-    await sleep(1600) // gözcünün başlangıç beklemesi dolsun
-    // Kilidi aşma denemesi: başka bir pencere öne gelir → gözcü Windows kilidini devreye sokmalı
-    spawn(
-      'powershell.exe',
-      [
-        '-NoProfile',
-        '-Command',
-        "Add-Type -AssemblyName System.Windows.Forms; $f = New-Object Windows.Forms.Form; $f.Text = 'deneme'; $t = New-Object Windows.Forms.Timer; $t.Interval = 3000; $t.Add_Tick({ $f.Close() }); $t.Start(); $f.Add_Shown({ $f.Activate() }); [void]$f.ShowDialog()"
-      ],
-      { windowsHide: false }
-    )
-    await waitFor(() => breakLock.get().windowsLocked, 8000)
-    check('kilit aşılmaya çalışılınca Windows kilidi devreye girer', breakLock.get().windowsLocked, breakLock.get())
-    await sleep(3500) // deneme penceresi kapansın
+    // Kilitle düğmesi de Windows kilidini ister
+    await clickButton('Kilitle')
+    await sleep(300)
+    check('ara şeridindeki Kilitle → Windows kilidi', breakLock.requests === locksAtStart + 2, { requests: breakLock.requests })
     powerMonitor.emit('unlock-screen') // kullanıcı Windows kilidini parmak iziyle açtı
-    await waitFor(() => !breakLock.get().locked, 3000)
     await sleep(500)
-    check('Windows kilidi açılınca Sunu Pro kilidi de açılır', !breakLock.get().locked && !main.isKiosk() && !(await js<boolean>(`!!document.querySelector('.lock-screen')`)))
-
+    check('kilit açılınca ara ve sunum sürüyor', show.state.running && (await js<boolean>(`!!document.querySelector('.banner--break')`)))
     main.focus()
     press(main, 'A')
     await sleep(400)

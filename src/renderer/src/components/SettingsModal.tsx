@@ -101,10 +101,10 @@ function General(): React.JSX.Element {
       </label>
       <label className="setting">
         <div>
-          <strong>Arada bilgisayarı kilitle</strong>
+          <strong>Arada Windows'u kilitle</strong>
           <span>
-            Ara (A) başlayınca ekranın parmak izi / PIN ile açılan kilide geçer; projeksiyonda geri sayım sürer. Kilit
-            aşılmaya çalışılırsa Windows kilidi devreye girer.
+            Ara (A) başlayınca Windows kilitlenir; parmak izi ya da PIN ile açılır. Kilitliyken projeksiyonda Windows kilit
+            ekranı görünür; açınca sunum ve ara geri sayımı kaldığı yerden sürer.
           </span>
         </div>
         <input

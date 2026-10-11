@@ -11,7 +11,7 @@ import { flushLibrary, registerLibrary } from './library'
 import { flushSessions } from './sessions'
 import { registerUpdater } from './updater'
 import { log, logDir } from './log'
-import { breakLock, registerLock } from './lock'
+import { registerLock } from './lock'
 import type { Settings } from '../shared/types'
 
 let mainWindow: BrowserWindow | null = null
@@ -99,10 +99,6 @@ app.whenReady().then(() => {
   registerLock(() => mainWindow)
 
   mainWindow = createMainWindow(show.displays().presenter)
-  // Ara kilidi açıkken pencere kapatılamaz (Alt+F4 vb.)
-  mainWindow.on('close', (e) => {
-    if (breakLock.get().locked) e.preventDefault()
-  })
   // Ana pencere kapanınca (katman açık olsa bile) uygulama kapanır
   mainWindow.on('closed', () => {
     mainWindow = null

@@ -4,7 +4,6 @@ import type {
   DisplayInfo,
   InkMap,
   LibraryView,
-  LockState,
   PresentationInfo,
   Result,
   Settings,
@@ -52,12 +51,9 @@ const api = {
     forgetRecent: (path: string): Promise<LibraryView> => ipcRenderer.invoke('library:forget-recent', path),
     onChange: (cb: (view: LibraryView) => void): (() => void) => sub('library:changed', cb)
   },
-  // Ara kilidi (Windows Hello ile açılır)
+  // Ara kilidi: Windows'un kendi kilidi (parmak izi / PIN ile açılır)
   lock: {
-    start: (): Promise<LockState> => ipcRenderer.invoke('lock:start'),
-    verify: (): Promise<string> => ipcRenderer.invoke('lock:verify'),
-    get: (): Promise<LockState> => ipcRenderer.invoke('lock:get'),
-    onState: (cb: (s: LockState) => void): (() => void) => sub('lock:state', cb)
+    windows: (reason?: string): Promise<void> => ipcRenderer.invoke('lock:windows', reason)
   },
   ink: {
     load: (path: string): Promise<InkMap | null> => ipcRenderer.invoke('ink:load', path),
