@@ -1,7 +1,7 @@
 {
   "name": "sunupro",
   "productName": "Sunu Pro",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "description": "Sunu Pro — derslere göre düzenlenen, kaldığı yeri hatırlayan, dokunmatik işaretçili çift ekran PowerPoint sunum aracı",
   "main": "./out/main/index.js",
   "author": "Ahmet Süslü",
