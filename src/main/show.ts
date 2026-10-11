@@ -18,7 +18,7 @@ import { PptError, ppt } from './pptctl'
 import { physicalCenter, pickAudienceDisplay, pickPresenterDisplay } from './displays'
 import { connectPorts, createOverlayWindow, fitToDisplay } from './windows'
 import { loadSettings, saveSettings } from './store'
-import { getSession, markRecent, saveSession } from './sessions'
+import { getSession, markRecent, saveSession, setPresented } from './sessions'
 import { log } from './log'
 import {
   ShowScreen,
@@ -176,6 +176,8 @@ class ShowController {
         click: next.click ?? 0,
         slideCount: this.presentation.slideCount
       })
+      // Son görünür slayta gelindiyse sunu kütüphanede "sunuldu" olarak işaretlenir
+      if (next.slide >= this.presentation.lastVisible) setPresented([this.presentation.path], true)
     }
     return next
   }

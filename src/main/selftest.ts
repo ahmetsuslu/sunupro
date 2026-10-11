@@ -487,7 +487,9 @@ Start-Sleep -Milliseconds 150; [void][M]::SetCursorPos($old.X, $old.Y)`
     // H — Kütüphane, ön hazırlık, kaldığın yerden devam, ara modu, çizim saklama (arayüz üzerinden)
     const clickButton = (text: string): Promise<boolean> =>
       js(`(() => { const b = [...document.querySelectorAll('button')].find((x) => x.textContent.includes(${JSON.stringify(text)})); b?.click(); return !!b })()`)
-    type View = { courses: { id: string; items: { name: string; status: string; session: { slide: number } | null }[] }[] }
+    type View = {
+      courses: { id: string; items: { name: string; status: string; session: { slide: number } | null; presentedAt: number | null }[] }[]
+    }
 
     await js(`document.querySelector('button[title="Sunuyu kapat"]')?.click()`)
     await waitFor(() => !show.presentation, 5000)
@@ -517,8 +519,25 @@ Start-Sleep -Milliseconds 150; [void][M]::SetCursorPos($old.X, $old.Y)`
     await sleep(500)
     await shot('h0-kutuphane', 'presenter')
 
-    const sess = (await js<View>(`window.api.library.get()`)).courses[0].items.find((i) => i.name === 'ornek-sunu.pptx')?.session
+    const sample0 = (await js<View>(`window.api.library.get()`)).courses[0].items.find((i) => i.name === 'ornek-sunu.pptx')
+    const sess = sample0?.session
     check('örnek sunu için kalınan yer kayıtlı', !!sess && sess.slide >= 1, sess)
+    check('son slayta gelinen sunu "sunuldu" işaretlendi', sample0?.presentedAt != null, sample0?.presentedAt)
+
+    // Sunuldu işareti: Shift+✓ üsttekilerle birlikte işaretler, ✓ tek tek kaldırır; "Sıradaki" ilk sunulmamış sunu
+    const presentedUi = (): Promise<{ count?: string; next?: string }> =>
+      js(`({ count: document.querySelector('.lib-head__count')?.textContent, next: document.querySelector('.file-row--next .file-row__name')?.textContent })`)
+    const tick = (name: string, shiftKey: boolean): Promise<unknown> =>
+      js(`(() => { const row = [...document.querySelectorAll('.file-row')].find((r) => r.querySelector('.file-row__name').textContent === ${JSON.stringify(name)}); row.querySelector('button[aria-pressed]').dispatchEvent(new MouseEvent('click', { bubbles: true, shiftKey: ${shiftKey} })); return true })()`)
+    await tick('Hafta 2', true)
+    await sleep(300)
+    const ui1 = await presentedUi()
+    check('Shift+✓ → üsttekilerle birlikte sunuldu, sıradaki Hafta 10', ui1.count === '3 / 4 sunuldu' && ui1.next === 'Hafta 10', ui1)
+    await shot('h0b-sunuldu', 'presenter')
+    await tick('Hafta 2', false)
+    await sleep(300)
+    const ui2 = await presentedUi()
+    check('✓ → işaret kalktı, sıradaki Hafta 2', ui2.count === '2 / 4 sunuldu' && ui2.next === 'Hafta 2', ui2)
 
     await js(`[...document.querySelectorAll('.file-row')].find((r) => r.textContent.includes('ornek-sunu')).click()`)
     await waitFor(() => show.presentation?.name === 'ornek-sunu.pptx', 15000)

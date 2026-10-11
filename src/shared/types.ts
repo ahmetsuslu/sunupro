@@ -55,6 +55,8 @@ export type LibraryFile = {
   /** Hazırlama hatası (status = error) */
   error?: string
   session: FileSession | null
+  /** Sunuldu olarak işaretlendiği zaman (elle ya da son slayta gelince); işaretsizse null */
+  presentedAt: number | null
   /** Bağlı klasörden geldi */
   fromFolder: boolean
 }

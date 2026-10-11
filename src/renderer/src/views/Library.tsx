@@ -62,7 +62,11 @@ export default function Library({ onOpen, onSettings, error, onDismissError }: P
     if (path) onOpen(path)
   }
 
-  const resume = view?.recent.find((r) => r.session) ?? null
+  // Sunuldu olarak işaretlenmiş (bitmiş) sunu "kaldığın yerden devam" önerilmez
+  const resume = view?.recent.find((r) => r.session && !r.presentedAt) ?? null
+  // Derste sıradaki sunu: sunulmamış ilk dosya
+  const nextPath = course?.items.find((f) => !f.presentedAt && f.status !== 'missing')?.path ?? null
+  const doneCount = course?.items.filter((f) => f.presentedAt).length ?? 0
 
   return (
     <div
@@ -195,6 +199,11 @@ export default function Library({ onOpen, onSettings, error, onDismissError }: P
               <button className="icon-btn" title="Dersi düzenle" onClick={() => setDialog({ kind: 'edit', course })}>
                 ✎
               </button>
+              {!!course.items.length && (
+                <span className="lib-head__count">
+                  {doneCount} / {course.items.length} sunuldu
+                </span>
+              )}
               <div className="spacer" />
               <button className="btn btn--lg" onClick={async () => setView(await window.api.library.addFiles(course.id))}>
                 + Sunu ekle
@@ -228,10 +237,28 @@ export default function Library({ onOpen, onSettings, error, onDismissError }: P
                     key={f.path}
                     file={f}
                     index={i + 1}
+                    next={f.path === nextPath}
                     onOpen={() => onOpen(f.path)}
                     onRetry={async () => setView(await window.api.library.retry(f.path))}
                     actions={
                       <>
+                        <button
+                          className={`icon-btn ${f.presentedAt ? 'icon-btn--done' : ''}`}
+                          aria-pressed={!!f.presentedAt}
+                          title={
+                            f.presentedAt
+                              ? 'Sunulmadı olarak işaretle'
+                              : 'Sunuldu olarak işaretle (Shift: üsttekilerle birlikte)'
+                          }
+                          onClick={async (e) => {
+                            e.stopPropagation()
+                            // Shift ile: bu ve üstündeki tüm sunular (ör. "ilk 3 hafta bitti")
+                            const paths = e.shiftKey && !f.presentedAt ? course.items.slice(0, i + 1).map((x) => x.path) : [f.path]
+                            setView(await window.api.library.setPresented(paths, !f.presentedAt))
+                          }}
+                        >
+                          ✓
+                        </button>
                         <button
                           className="icon-btn"
                           title="Yukarı taşı"
@@ -342,6 +369,7 @@ function FileRow({
   file,
   index,
   subtitle,
+  next,
   onOpen,
   onRetry,
   actions
@@ -349,21 +377,33 @@ function FileRow({
   file: LibraryFile
   index?: number
   subtitle?: string
+  /** Derste sıradaki (sunulmamış ilk) sunu */
+  next?: boolean
   onOpen: () => void
   onRetry?: () => void
   actions?: React.ReactNode
 }): React.JSX.Element {
   const missing = file.status === 'missing'
+  const done = file.presentedAt != null
   return (
-    <div className={`file-row ${missing ? 'file-row--missing' : ''}`} onClick={() => !missing && onOpen()} role="button">
+    <div
+      className={`file-row ${missing ? 'file-row--missing' : ''} ${done ? 'file-row--done' : ''} ${next ? 'file-row--next' : ''}`}
+      onClick={() => !missing && onOpen()}
+      role="button"
+    >
       {index != null && <span className="file-row__index">{index}</span>}
       <div className="file-row__main">
         <div className="file-row__name" title={file.path}>
           {file.name.replace(/\.(pptx|pptm|ppsx|ppsm|ppt|pps)$/i, '')}
         </div>
         <div className="file-row__meta">
+          {next && <span className="next-badge">Sıradaki</span>}
           {subtitle && <span>{subtitle} · </span>}
-          {file.session ? (
+          {done ? (
+            <span className="file-row__done" title={`İşaretlendi: ${new Date(file.presentedAt!).toLocaleString('tr-TR')}`}>
+              ✓ Sunuldu
+            </span>
+          ) : file.session ? (
             <span>
               Slayt {file.session.slide} / {file.session.slideCount} · {timeAgo(file.session.updatedAt)}
             </span>
@@ -371,7 +411,7 @@ function FileRow({
             <span className="hint">Henüz sunulmadı</span>
           )}
         </div>
-        <Progress session={file.session} />
+        {!done && <Progress session={file.session} />}
       </div>
       <span
         className={`status status--${file.status}`}

@@ -35,7 +35,7 @@ PowerPoint'in sunucu görünümünde ders anlatırken eksik kalan noktalar için
   üstünde Sunu Pro'nun şeffaf çizim katmanı durur. Yedek olarak animasyonsuz **görsel mod**.
 - **Sunucu ekranı:** gösterinin canlı yansıması (animasyon adımı dahil), sonraki slayt ve kalan
   animasyon adımı, büyütülebilir notlar, geçen süre (duraklat/sıfırla), saat, slayt ızgarası.
-- **İşaretleme:** iz bırakan lazer (renk ve boyut seçilebilir), yarı saydam vurgulayıcı, basınca
+- **İşaretleme:** iz bırakan lazer (renk ve boyut seçilebilir; iz sunucu ekranında da görünür), yarı saydam vurgulayıcı, basınca
   duyarlı kalem, silgi; renk ve kalınlık seçimi; slayt başına geri al/yinele; çizimler slayta bağlıdır
   (slayt değişince saklanır, dönünce geri gelir); istenirse dosya bazında kalıcı.
 - **Yakınlaştırma:** iki parmakla büyüt/küçült ve kaydır (ya da Ctrl+tekerlek, `+` / `-`); projeksiyona
@@ -45,6 +45,8 @@ PowerPoint'in sunucu görünümünde ders anlatırken eksik kalan noktalar için
   araç seçili değilken parmakla kaydırarak slayt değiştirme; fare tekerleğiyle ileri/geri.
 - **Ders kütüphanesi:** dersler, klasör bağlama (doğal sıralama: Hafta 1, 2, 10), arka planda ön
   hazırlık (ders anında açılış anlık), son açılanlar.
+- **Sunuldu takibi:** son slayta gelinen sunu kendiliğinden "sunuldu" olarak işaretlenir; ✓ ile elle
+  işaretlenir ya da kaldırılır (Shift+✓ üsttekilerle birlikte işaretler). Derste sıradaki sunu vurgulanır.
 - **Ara modu (`A`):** projeksiyonda geri sayım ve dönüş saati, süre sayacı durur. Sunum boyunca ekran
   kendiliğinden kararmaz.
 - **Ekranlar:** seyirci ekranını seçme, ekranları değiştirme, projeksiyon kablosu çıkarsa gösteriyi

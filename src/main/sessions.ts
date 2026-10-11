@@ -12,9 +12,11 @@ type SessionData = {
   positions: Record<string, FileSession & { path: string }>
   /** Son açılan dosyalar (yeniden eskiye) */
   recent: string[]
+  /** Sunuldu olarak işaretlenen dosyalar: yol (küçük harf) → işaretlenme zamanı */
+  presented: Record<string, { path: string; at: number }>
 }
 
-const file = new JsonFile<SessionData>('sessions.json', () => ({ positions: {}, recent: [] }))
+const file = new JsonFile<SessionData>('sessions.json', () => ({ positions: {}, recent: [], presented: {} }))
 
 const keyOf = (path: string): string => path.toLowerCase()
 
@@ -44,6 +46,25 @@ export function recentFiles(): string[] {
 export function forgetRecent(path: string): void {
   const data = file.get()
   file.set({ ...data, recent: data.recent.filter((p) => keyOf(p) !== keyOf(path)) })
+}
+
+export function presentedAt(path: string): number | null {
+  return file.get().presented[keyOf(path)]?.at ?? null
+}
+
+/** Sunuldu işareti koy/kaldır. Zaten işaretli dosyanın ilk tarihi korunur. */
+export function setPresented(paths: string[], on: boolean): void {
+  const data = file.get()
+  const presented = { ...data.presented }
+  let changed = false
+  for (const p of paths) {
+    const k = keyOf(p)
+    if (on && !presented[k]) presented[k] = { path: p, at: Date.now() }
+    else if (!on && presented[k]) delete presented[k]
+    else continue
+    changed = true
+  }
+  if (changed) file.set({ ...data, presented })
 }
 
 export function flushSessions(): void {

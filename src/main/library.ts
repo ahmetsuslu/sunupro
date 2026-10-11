@@ -3,7 +3,7 @@ import { randomUUID } from 'crypto'
 import { existsSync, readdirSync, statSync } from 'fs'
 import { basename, dirname, join } from 'path'
 import { JsonFile } from './json-file'
-import { forgetRecent, getSession, loadInk, recentFiles, saveInk } from './sessions'
+import { forgetRecent, getSession, loadInk, presentedAt, recentFiles, saveInk, setPresented } from './sessions'
 import { friendlyError, isPrepared, show } from './show'
 import type { Course, FileStatus, InkMap, LibraryCourse, LibraryFile, LibraryView } from '../shared/types'
 
@@ -114,7 +114,14 @@ class Preparer {
 let preparer: Preparer
 
 function toFile(path: string, fromFolder: boolean): LibraryFile {
-  return { path, name: basename(path), ...preparer.status(path), session: getSession(path), fromFolder }
+  return {
+    path,
+    name: basename(path),
+    ...preparer.status(path),
+    session: getSession(path),
+    presentedAt: presentedAt(path),
+    fromFolder
+  }
 }
 
 /** Kütüphanenin arayüze giden görünümü (klasörler taranır, durumlar hesaplanır). */
@@ -245,6 +252,11 @@ export function registerLibrary(getMain: () => BrowserWindow | null): void {
 
   ipcMain.handle('library:forget-recent', (_e, path: string) => {
     forgetRecent(path)
+    return view()
+  })
+
+  ipcMain.handle('library:set-presented', (_e, paths: string[], on: boolean) => {
+    setPresented(paths, on)
     return view()
   })
 
