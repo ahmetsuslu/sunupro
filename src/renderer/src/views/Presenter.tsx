@@ -53,8 +53,8 @@ export default function Presenter({ presentation: p, onClose, onSettings, inputB
   // Çizimler sunu boyunca bellekte; değişiklikler seyirci katmanına aktarılır
   const [ink] = useState(() => new InkStore())
   const [, bump] = useReducer((n: number) => n + 1, 0)
-  const testHook = window as unknown as { __sunuSpike?: boolean; __sunuInk?: InkStore }
-  if (testHook.__sunuSpike) testHook.__sunuInk = ink
+  const testHook = window as unknown as { __sunuSelfTest?: boolean; __sunuInk?: InkStore }
+  if (testHook.__sunuSelfTest) testHook.__sunuInk = ink
 
   const toOverlay = useCallback((msg: OverlayMsg) => post(portRef.current, msg), [])
 

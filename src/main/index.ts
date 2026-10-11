@@ -6,7 +6,7 @@ import { ppt } from './pptctl'
 import { cacheRoot, registerShow, show } from './show'
 import { loadSettings, saveSettings } from './store'
 import { createMainWindow } from './windows'
-import { runSpike } from './spike'
+import { runSelfTest } from './selftest'
 import { flushLibrary, registerLibrary } from './library'
 import { flushSessions } from './sessions'
 import { registerUpdater } from './updater'
@@ -16,7 +16,7 @@ import type { Settings } from '../shared/types'
 let mainWindow: BrowserWindow | null = null
 
 // Otomatik doğrulama kullanıcının gerçek kütüphane/ayar verisine dokunmasın
-if (process.env['SUNU_SPIKE']) app.setPath('userData', join(process.env['SUNU_SPIKE'], 'userdata'))
+if (process.env['SUNU_SELFTEST']) app.setPath('userData', join(process.env['SUNU_SELFTEST'], 'userdata'))
 
 // Önbellekteki slayt görselleri: sunu://cache/<anahtar>/slide-001.png | thumb-001.png
 protocol.registerSchemesAsPrivileged([
@@ -103,8 +103,8 @@ app.whenReady().then(() => {
   // PowerPoint denetleyicisini arka planda ısıt (ilk sunu açılışı hızlı olsun)
   ppt.start().catch((err) => log('[pptctl] başlatılamadı:', err))
 
-  const spikeOut = process.env['SUNU_SPIKE']
-  if (spikeOut) runSpike(mainWindow, spikeOut)
+  const selfTestOut = process.env['SUNU_SELFTEST']
+  if (selfTestOut) runSelfTest(mainWindow, selfTestOut)
 })
 
 let quitting = false

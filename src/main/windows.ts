@@ -1,4 +1,4 @@
-import { BrowserWindow, MessageChannelMain, nativeTheme, shell, type Display } from 'electron'
+import { app, BrowserWindow, MessageChannelMain, shell, type Display } from 'electron'
 import { join } from 'path'
 
 const preload = join(__dirname, '../preload/index.js')
@@ -23,8 +23,10 @@ export function createMainWindow(display: Display): BrowserWindow {
     minHeight: 600,
     show: false,
     autoHideMenuBar: true,
-    backgroundColor: nativeTheme.shouldUseDarkColors ? '#16181d' : '#f5f6f8',
+    backgroundColor: '#16181d', // arayüz koyu temada sabit
     title: 'Sunu Pro',
+    // Paketli uygulamada simge exe'den gelir; geliştirmede build/icon.png
+    ...(app.isPackaged ? {} : { icon: join(app.getAppPath(), 'build', 'icon.png') }),
     webPreferences: { preload, sandbox: false, contextIsolation: true, nodeIntegration: false }
   })
   win.once('ready-to-show', () => {

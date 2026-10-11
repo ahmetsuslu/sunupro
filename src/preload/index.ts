@@ -96,9 +96,9 @@ const api = {
     onNone: (cb: () => void): (() => void) => sub('update:none', cb),
     onError: (cb: (message: string) => void): (() => void) => sub('update:error', cb)
   },
-  // Otomatik doğrulama kancaları (yalnızca SUNU_SPIKE ile kullanılır)
-  spike: {
-    onPresentation: (cb: (info: PresentationInfo) => void): (() => void) => sub('spike:presentation', cb)
+  // Uçtan uca test kancası (yalnızca SUNU_SELFTEST ile kullanılır)
+  selftest: {
+    onPresentation: (cb: (info: PresentationInfo) => void): (() => void) => sub('selftest:presentation', cb)
   }
 }
 

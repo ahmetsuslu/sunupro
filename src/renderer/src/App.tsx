@@ -26,9 +26,9 @@ function Shell(): React.JSX.Element {
 
   useEffect(
     () =>
-      window.api.spike.onPresentation((info) => {
-        // Otomatik doğrulama: sunucu ekranı çizim deposunu test için dışa açar
-        ;(window as unknown as { __sunuSpike: boolean }).__sunuSpike = true
+      window.api.selftest.onPresentation((info) => {
+        // Uçtan uca test: sunucu ekranı çizim deposunu test için dışa açar
+        ;(window as unknown as { __sunuSelfTest: boolean }).__sunuSelfTest = true
         setPresentation(info)
       }),
     []

@@ -8,7 +8,7 @@ import { physicalCenter } from './displays'
 import { loadSettings, saveSettings } from './store'
 
 /**
- * Otomatik uçtan uca doğrulama (yalnızca SUNU_SPIKE=<klasör> ortam değişkeniyle çalışır).
+ * Otomatik uçtan uca doğrulama (yalnızca SUNU_SELFTEST=<klasör> ortam değişkeniyle çalışır; npm run test:e2e).
  * Örnek sunuyla gerçek PowerPoint + iki ekran üzerinde senaryoları koşar; kontrol sonuçlarını
  * ve ekran görüntülerini klasöre yazar, sonra uygulamayı kapatır.
  */
@@ -47,7 +47,7 @@ function runPs(outDir: string, name: string, code: string): string {
   }).trim()
 }
 
-export async function runSpike(main: BrowserWindow, outDir: string): Promise<void> {
+export async function runSelfTest(main: BrowserWindow, outDir: string): Promise<void> {
   mkdirSync(outDir, { recursive: true })
   const checks: { name: string; ok: boolean; detail?: unknown }[] = []
   const check = (name: string, ok: boolean, detail?: unknown): void => {
@@ -57,7 +57,7 @@ export async function runSpike(main: BrowserWindow, outDir: string): Promise<voi
     const d = which === 'audience' ? show.displays().audience : show.displays().presenter
     await captureDisplay(d, join(outDir, `${name}.png`))
   }
-  const sample = join(app.getAppPath(), 'samples', 'ornek-sunu.pptx')
+  const sample = process.env['SUNU_SAMPLE'] || join(app.getAppPath(), 'samples', 'ornek-sunu.pptx')
   const savedAudience = loadSettings().audienceDisplayId
   const consoleLog: string[] = []
   main.webContents.on('console-message', (e) => {
@@ -81,8 +81,10 @@ export async function runSpike(main: BrowserWindow, outDir: string): Promise<voi
     writeFileSync(join(outDir, 'bozuk.pptx'), 'bu bir sunu değil')
     await expectErr('olmayan dosya → NOT_FOUND', join(outDir, 'yok.pptx'), 'NOT_FOUND')
     await expectErr('bozuk dosya → CORRUPT', join(outDir, 'bozuk.pptx'), 'CORRUPT')
-    const prot = join(outDir, '..', 'parolali.pptx')
-    if (existsSync(prot)) await expectErr('parola korumalı → PASSWORD', prot, 'PASSWORD')
+    // Parola korumalı .pptx'ler ZIP değil şifreli OLE kapsayıcısıdır (D0 CF 11 E0 ile başlar)
+    const prot = join(outDir, 'parolali.pptx')
+    writeFileSync(prot, Buffer.concat([Buffer.from('d0cf11e0a1b11ae1', 'hex'), Buffer.alloc(504)]))
+    await expectErr('parola korumalı → PASSWORD', prot, 'PASSWORD')
 
     // B — Açma + önbellek
     let t0 = Date.now()
@@ -93,7 +95,7 @@ export async function runSpike(main: BrowserWindow, outDir: string): Promise<voi
     check('önbellek v2 + küçük resimler', manifest.v === 2 && existsSync(join(dir, 'thumb-005.png')))
     check('dosya açık değil → kopya yok', info.openedCopy === false)
 
-    main.webContents.send('spike:presentation', info)
+    main.webContents.send('selftest:presentation', info)
     await sleep(800)
     await shot('p1-gosteri-oncesi', 'presenter')
 
@@ -433,8 +435,15 @@ Start-Sleep -Milliseconds 150; [void][M]::SetCursorPos($old.X, $old.Y)`
     await clickButton('Güncelleme')
     await sleep(200)
     await clickButton('Güncellemeleri denetle')
-    await sleep(500)
-    check('geliştirme sürümünde güncelleme denetimi bilgisi', await js<boolean>(`document.body.innerText.includes('Geliştirme sürümünde')`))
+    // Geliştirmede denetim yapılmaz; paketli uygulamada GitHub'a gidilir ve bir sonuç gelir
+    const updateTexts = ['Geliştirme sürümünde', 'güncel', 'Denetlenemedi', 'indiriliyor', 'indirildi']
+    let updateText = ''
+    for (let i = 0; i < 40 && !updateText; i++) {
+      const body = await js<string>(`document.querySelector('.settings__status')?.textContent ?? ''`)
+      if (updateTexts.some((t) => body.includes(t))) updateText = body
+      else await sleep(250)
+    }
+    check('güncelleme denetimi sonuç verdi', !!updateText, updateText || 'sonuç yok')
     await clickButton('Genel')
     await sleep(400)
     await shot('i6-ayarlar-genel', 'presenter')
