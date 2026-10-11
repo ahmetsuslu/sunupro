@@ -387,16 +387,6 @@ kbd {
   position: absolute;
   pointer-events: none;
 }
-.laser-dot {
-  position: absolute;
-  width: 16px;
-  height: 16px;
-  margin: -8px 0 0 -8px;
-  border-radius: 50%;
-  background: var(--laser);
-  box-shadow: 0 0 12px 4px color-mix(in srgb, var(--laser) 60%, transparent);
-  pointer-events: none;
-}
 .chip--zoom {
   color: var(--accent-hover);
   border-color: color-mix(in srgb, var(--accent) 45%, transparent);

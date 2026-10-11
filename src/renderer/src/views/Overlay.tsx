@@ -3,15 +3,10 @@ import { ShowScreen, type AudienceConfig, type InkMap, type ShowState, type Zoom
 import { containRect, type Rect } from '../lib/geometry'
 import { onOverlayMessage } from '../lib/overlay-port'
 import { InkRenderer } from '../lib/ink-render'
+import { LaserRenderer } from '../lib/laser-render'
 import { formatCountdown } from '../lib/time'
 import { slideUrl } from '../lib/slides'
-import { fillStroke, type StrokePoint } from '../lib/stroke'
-import { withAlpha } from '../lib/tools'
 import { IDENTITY, isZoomed, zoomRect } from '../lib/zoom'
-
-const TRAIL_MS = 600
-
-type TrailPoint = { x: number; y: number; t: number }
 
 /**
  * Seyirci ekranındaki yakınlaştırma görünümü. Sunucudan gelen görünüm canlı modda ancak gösterinin
@@ -262,116 +257,32 @@ function BreakScreen(): React.JSX.Element | null {
   )
 }
 
-/** Lazer: parıltılı nokta + solan iz (seçilen renk ve boyutta). Yalnızca hareket varken çizer. */
+/** Lazer: parıltılı nokta + solan iz (sunucu ekranıyla aynı çizici). */
 function LaserLayer({ aspect, hidden, hub }: { aspect: number; hidden: boolean; hub: ViewHub }): React.JSX.Element {
   const canvasRef = useRef<HTMLCanvasElement>(null)
-  const aspectRef = useRef(aspect)
-  aspectRef.current = aspect
+  const rendererRef = useRef<LaserRenderer | null>(null)
 
   useEffect(() => {
-    const canvas = canvasRef.current!
-    const ctx = canvas.getContext('2d')!
-    let laser: { x: number; y: number } | null = null
-    let color = '#ff2a2a'
-    let size = 0.011
-    let view = hub.effective()
-    const trail: TrailPoint[] = []
-    let raf = 0
-
-    const resize = (): void => {
-      const dpr = window.devicePixelRatio || 1
-      canvas.width = Math.round(window.innerWidth * dpr)
-      canvas.height = Math.round(window.innerHeight * dpr)
-      schedule()
-    }
-
-    const draw = (): void => {
-      raf = 0
-      const now = performance.now()
-      const base = containRect(canvas.width, canvas.height, aspectRef.current)
-      const r = zoomRect(base, view)
-      ctx.clearRect(0, 0, canvas.width, canvas.height)
-      while (trail.length && now - trail[0].t > TRAIL_MS) trail.shift()
-
-      ctx.save()
-      ctx.beginPath()
-      ctx.rect(base.x, base.y, base.width, base.height)
-      ctx.clip()
-      const px = (p: { x: number; y: number }): [number, number] => [r.x + p.x * r.width, r.y + p.y * r.height]
-      const radius = Math.max(4, r.height * size)
-
-      // İz: kuyruğa doğru incelen tek parça şekil (basınç = noktanın tazeliği), uca doğru opaklaşan dolgu
-      if (trail.length > 1) {
-        const pts: StrokePoint[] = trail.map((p) => [...px(p), Math.max(0, 1 - (now - p.t) / TRAIL_MS)])
-        if (laser) pts.push([...px(laser), 1])
-        const [hx, hy] = pts[pts.length - 1]
-        let reach = 1
-        for (const [x, y] of pts) reach = Math.max(reach, Math.hypot(x - hx, y - hy))
-        const fade = ctx.createRadialGradient(hx, hy, 0, hx, hy, reach)
-        fade.addColorStop(0, withAlpha(color, 0.6))
-        fade.addColorStop(1, withAlpha(color, 0.05))
-        ctx.fillStyle = fade
-        fillStroke(ctx, pts, {
-          size: radius * 1.5,
-          thinning: 0.95,
-          smoothing: 0.6,
-          streamline: 0.35,
-          simulatePressure: false,
-          last: true
-        })
-      }
-
-      if (laser) {
-        const [x, y] = px(laser)
-        const glow = ctx.createRadialGradient(x, y, 0, x, y, radius * 3)
-        glow.addColorStop(0, withAlpha(color, 0.9))
-        glow.addColorStop(0.35, withAlpha(color, 0.45))
-        glow.addColorStop(1, withAlpha(color, 0))
-        ctx.fillStyle = glow
-        ctx.beginPath()
-        ctx.arc(x, y, radius * 3, 0, Math.PI * 2)
-        ctx.fill()
-        ctx.fillStyle = color
-        ctx.beginPath()
-        ctx.arc(x, y, radius, 0, Math.PI * 2)
-        ctx.fill()
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.85)'
-        ctx.beginPath()
-        ctx.arc(x, y, radius * 0.35, 0, Math.PI * 2)
-        ctx.fill()
-      }
-      ctx.restore()
-      if (laser || trail.length) raf = requestAnimationFrame(draw)
-    }
-    const schedule = (): void => {
-      if (!raf) raf = requestAnimationFrame(draw)
-    }
-
-    resize()
-    window.addEventListener('resize', resize)
-
+    const r = new LaserRenderer(canvasRef.current!, aspect)
+    rendererRef.current = r
+    r.resize()
+    const onResize = (): void => r.resize()
+    window.addEventListener('resize', onResize)
     const offMsg = onOverlayMessage((m) => {
-      if (m.t === 'laser') {
-        laser = { x: m.x, y: m.y }
-        color = m.color
-        size = m.size
-        trail.push({ ...laser, t: performance.now() })
-      } else if (m.t === 'laser-off') laser = null
-      else return
-      schedule()
+      if (m.t === 'laser') r.move({ x: m.x, y: m.y }, m.color, m.size)
+      else if (m.t === 'laser-off') r.move(null)
     })
-    const offView = hub.subscribe((v) => {
-      view = v
-      schedule()
-    })
-
+    const offView = hub.subscribe((v) => r.setView(v))
     return () => {
       offMsg()
       offView()
-      window.removeEventListener('resize', resize)
-      if (raf) cancelAnimationFrame(raf)
+      window.removeEventListener('resize', onResize)
+      r.dispose()
+      rendererRef.current = null
     }
   }, [hub])
+
+  useEffect(() => rendererRef.current?.setAspect(aspect), [aspect])
 
   return <canvas ref={canvasRef} className="overlay-canvas" style={{ visibility: hidden ? 'hidden' : 'visible' }} />
 }

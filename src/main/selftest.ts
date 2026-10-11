@@ -165,20 +165,47 @@ Start-Sleep -Milliseconds 150; [void][M]::SetCursorPos($old.X, $old.Y)`
     const st = (await main.webContents.executeJavaScript(
       `(() => { const r = document.querySelector('.stage').getBoundingClientRect(); return { x: r.x, y: r.y, w: r.width, h: r.height } })()`
     )) as { x: number; y: number; w: number; h: number }
-    for (let i = 0; i <= 30; i++) {
+    // Sahnede gönderilen fare konumu (tam sayı piksel) → sahneye göre 0..1
+    const sent = (nx: number, ny: number): { x: number; y: number; nx: number; ny: number } => {
+      const x = Math.round(st.x + nx * st.w)
+      const y = Math.round(st.y + ny * st.h)
+      return { x, y, nx: (x - st.x) / st.w, ny: (y - st.y) / st.h }
+    }
+    // Sunucu ekranındaki lazer tuvalinden piksel (RGBA): (nx, ny) çevresinde d piksellik kutudaki en opak nokta.
+    // dx: slayt yüksekliğine oranla yatay kaydırma. Sahne slayt oranında; yakınlaştırma yokken çağrılır.
+    const laserPx = (nx: number, ny: number, d = 0, dx = 0): Promise<number[]> =>
+      js<number[]>(`(() => {
+        const c = document.querySelector('.stage__laser')
+        const x = Math.round(${nx} * c.width + ${dx} * c.height), y = Math.round(${ny} * c.height)
+        const px = c.getContext('2d').getImageData(x - ${d}, y - ${d}, ${2 * d + 1}, ${2 * d + 1}).data
+        let best = 0
+        for (let i = 0; i < px.length; i += 4) if (px[i + 3] > px[best + 3]) best = i
+        return [...px.slice(best, best + 4)]
+      })()`)
+    const arc = (i: number): { x: number; y: number; nx: number; ny: number } => {
       const a = Math.PI * (0.15 + (0.7 * i) / 30)
-      const nx = 0.5 - 0.3 * Math.cos(a)
-      const ny = 0.75 - 0.35 * Math.sin(a)
-      main.webContents.sendInputEvent({ type: 'mouseMove', x: Math.round(st.x + nx * st.w), y: Math.round(st.y + ny * st.h) })
+      return sent(0.5 - 0.3 * Math.cos(a), 0.75 - 0.35 * Math.sin(a))
+    }
+    for (let i = 0; i <= 30; i++) {
+      const p = arc(i)
+      main.webContents.sendInputEvent({ type: 'mouseMove', x: p.x, y: p.y })
       await sleep(16)
     }
     await sleep(40)
+    // Uç: tam opak nokta tam son konumda (geride kalmıyor); iz: birkaç örnek geride hâlâ boyalı
+    const end = arc(30)
+    const tail = await laserPx(arc(25).nx, arc(25).ny, 4)
+    // Gerçek imleç pencerenin üstündeyse Windows'un ürettiği tek bir fare olayı lazeri kaldırabilir: son konumu yinele
+    let head = await laserPx(end.nx, end.ny)
+    for (let i = 0; i < 3 && head[3] < 250; i++) {
+      main.webContents.sendInputEvent({ type: 'mouseMove', x: end.x, y: end.y })
+      await sleep(50)
+      head = await laserPx(end.nx, end.ny)
+    }
+    check('lazer işaretçiyi geride kalmadan izliyor', head[3] >= 250, { head, end })
+    check('sunucu ekranında lazer izi animasyonu görünüyor', tail[3] > 20 && tail[0] > tail[1], { tail })
     await shot('a2-lazer-iz', 'audience')
-    const dot = (await main.webContents.executeJavaScript(
-      `(() => { const s = document.querySelector('.laser-dot').style; return { x: parseFloat(s.left) / 100, y: parseFloat(s.top) / 100 } })()`
-    )) as { x: number; y: number }
-    const end = { x: 0.5 - 0.3 * Math.cos(Math.PI * 0.85), y: 0.75 - 0.35 * Math.sin(Math.PI * 0.85) }
-    check('lazer işaretçiyi geride kalmadan izliyor', Math.hypot(dot.x - end.x, dot.y - end.y) < 0.02, { dot, end })
+    await shot('a3-lazer-iz-sunucu', 'presenter')
 
     // Çizim: gerçek fare sürüklemesiyle kalem ve vurgulayıcı; geri al/yinele, silgi, slayt değişimi
     const inkCount = async (slide: number): Promise<number> =>
@@ -357,13 +384,16 @@ Start-Sleep -Milliseconds 150; [void][M]::SetCursorPos($old.X, $old.Y)`
     const ink1 = await js<{ laserColor: string; laserSize: number }>(`window.api.settings.get().then((s) => s.ink)`)
     check('lazer rengi ve boyutu seçilebiliyor', ink1.laserColor === '#22e05a' && ink1.laserSize === 2, ink1)
     for (let i = 0; i <= 12; i++) {
-      main.webContents.sendInputEvent({ type: 'mouseMove', x: Math.round(st.x + (0.3 + 0.03 * i) * st.w), y: Math.round(st.y + 0.6 * st.h) })
+      const p = sent(0.3 + 0.03 * i, 0.6)
+      main.webContents.sendInputEvent({ type: 'mouseMove', x: p.x, y: p.y })
       await sleep(16)
     }
     await sleep(40)
+    // Noktanın hareket yönündeki kenarı (beyaz göbek ve iz dışında): seçilen yeşil, tam opak
+    const lEnd = sent(0.3 + 0.03 * 12, 0.6)
+    const rim = await laserPx(lEnd.nx, lEnd.ny, 0, 0.65 * 0.017)
+    check('sunucudaki lazer seçilen renkte', rim[3] >= 250 && rim[1] > 180 && rim[0] < 100 && rim[2] < 140, rim)
     await shot('z3-lazer-yesil-buyuk', 'audience')
-    const dotColor = await js<string>(`document.querySelector('.laser-dot').style.getPropertyValue('--laser')`)
-    check('sunucudaki lazer noktası seçilen renkte', dotColor === '#22e05a', dotColor)
     press(main, 'R')
     await sleep(300)
     const ink2 = await js<{ laserColor: string }>(`window.api.settings.get().then((s) => s.ink)`)

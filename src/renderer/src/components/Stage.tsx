@@ -4,6 +4,7 @@ import { containRect, type Rect } from '../lib/geometry'
 import { slideUrl } from '../lib/slides'
 import { ERASER_RADIUS, HL_SIZES, LASER_SIZES, PEN_SIZES, isDrawingTool, type Tool } from '../lib/tools'
 import { InkRenderer, hitsStroke } from '../lib/ink-render'
+import { LaserRenderer } from '../lib/laser-render'
 import type { InkStore } from '../lib/ink-store'
 import { MAX_ZOOM, SNAP_ZOOM, clampView, isZoomed, toSlide, zoomAt, type ZoomView } from '../lib/zoom'
 
@@ -56,7 +57,8 @@ export default function Stage(props: Props): React.JSX.Element {
   const videoRef = useRef<HTMLVideoElement>(null)
   const inkCanvasRef = useRef<HTMLCanvasElement>(null)
   const rendererRef = useRef<InkRenderer | null>(null)
-  const dotRef = useRef<HTMLDivElement>(null)
+  const laserCanvasRef = useRef<HTMLCanvasElement>(null)
+  const laserRef = useRef<LaserRenderer | null>(null)
   const ringRef = useRef<HTMLDivElement>(null)
   const swipeRef = useRef<{ id: number; x: number; y: number } | null>(null)
   const drawingRef = useRef<Drawing | null>(null)
@@ -93,6 +95,24 @@ export default function Stage(props: Props): React.JSX.Element {
       ro.disconnect()
       r.dispose()
       rendererRef.current = null
+    }
+  }, [aspect, zoom])
+
+  // Lazer katmanı (iz animasyonu; yakınlaştırmayla birlikte büyür)
+  useEffect(() => {
+    const canvas = laserCanvasRef.current!
+    const r = new LaserRenderer(canvas, aspect)
+    laserRef.current = r
+    r.setView(zoom.get())
+    r.resize()
+    const ro = new ResizeObserver(() => r.resize())
+    ro.observe(canvas)
+    const offView = zoom.subscribe((v) => r.setView(v))
+    return () => {
+      ro.disconnect()
+      offView()
+      r.dispose()
+      laserRef.current = null
     }
   }, [aspect, zoom])
 
@@ -182,22 +202,11 @@ export default function Stage(props: Props): React.JSX.Element {
   }, [zoom])
 
   // ---------- Lazer ----------
-  /** u, w: sahne üzerindeki konum (0..1); katmana slayt koordinatı gider */
+  /** u, w: sahne üzerindeki konum (0..1). Burada ve seyirci katmanında aynı iz animasyonuyla çizilir. */
   const laser = (pos: { u: number; w: number } | null): void => {
-    const dot = dotRef.current
-    if (dot) {
-      dot.style.display = pos ? 'block' : 'none'
-      if (pos) {
-        // Seçilen lazer rengi ve boyutu (yakınlaştırmada seyirci ekranıyla aynı oranda büyür)
-        const d = Math.max(8, (LASER_SIZES[inkPrefs.laserSize] ?? LASER_SIZES[1]) * 2 * (stageRef.current?.clientHeight ?? 0) * zoom.get().s)
-        dot.style.width = dot.style.height = `${d}px`
-        dot.style.margin = `${-d / 2}px 0 0 ${-d / 2}px`
-        dot.style.setProperty('--laser', inkPrefs.laserColor)
-        dot.style.left = `${pos.u * 100}%`
-        dot.style.top = `${pos.w * 100}%`
-      }
-    }
-    onLaser(pos ? toSlide(pos.u, pos.w, zoom.get()) : null)
+    const p = pos ? toSlide(pos.u, pos.w, zoom.get()) : null
+    laserRef.current?.move(p, inkPrefs.laserColor, LASER_SIZES[inkPrefs.laserSize] ?? LASER_SIZES[1])
+    onLaser(p)
   }
   useEffect(() => {
     if (tool !== 'laser') laser(null)
@@ -451,8 +460,8 @@ export default function Stage(props: Props): React.JSX.Element {
           />
         </div>
         <canvas ref={inkCanvasRef} className="stage__ink" />
+        <canvas ref={laserCanvasRef} className="stage__ink stage__laser" />
         <div ref={ringRef} className="eraser-ring" style={{ display: 'none' }} />
-        <div ref={dotRef} className="laser-dot" style={{ display: 'none' }} />
       </div>
     </div>
   )
