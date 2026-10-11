@@ -1,4 +1,4 @@
-import { app, BrowserWindow, desktopCapturer, powerMonitor, screen, type Display } from 'electron'
+import { app, BrowserWindow, desktopCapturer, screen, type Display } from 'electron'
 import { execFileSync } from 'child_process'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs'
 import { join } from 'path'
@@ -6,7 +6,6 @@ import { cpus } from 'os'
 import { ppt } from './pptctl'
 import { cacheRoot, friendlyError, show } from './show'
 import { physicalCenter } from './displays'
-import { breakLock } from './lock'
 import { loadSettings, saveSettings } from './store'
 
 /**
@@ -51,8 +50,6 @@ function runPs(outDir: string, name: string, code: string): string {
 
 export async function runSelfTest(main: BrowserWindow, outDir: string): Promise<void> {
   mkdirSync(outDir, { recursive: true })
-  // Ara kilidi testi gerçek Windows kilidini tetiklemesin (gözcü yalnızca bildirir)
-  process.env['SUNU_LOCK_DRYRUN'] = '1'
   const checks: { name: string; ok: boolean; detail?: unknown }[] = []
   const check = (name: string, ok: boolean, detail?: unknown): void => {
     checks.push({ name, ok, detail })
@@ -504,25 +501,17 @@ Start-Sleep -Milliseconds 150; [void][M]::SetCursorPos($old.X, $old.Y)`
     check('devam → kalınan slayttan başladı', show.state.slide === sess?.slide, { state: show.state.slide, sess })
 
     main.focus()
-    const locksAtStart = breakLock.requests
     press(main, 'A')
     await sleep(800)
     check('A → ara modu (sunucuda şerit)', await js<boolean>(`!!document.querySelector('.banner--break')`))
-
-    // Ara kilidi: Windows'un kendi kilidi istenir (kuru çalıştırma: gerçek kilit yerine yalnızca sayılır).
-    // Uygulama tam ekran/en üst kilit penceresine geçmez, ek gözcü süreci yoktur.
-    await waitFor(() => breakLock.requests > locksAtStart, 3000)
-    check('A → Windows kilidi istendi', breakLock.requests === locksAtStart + 1, { requests: breakLock.requests })
-    check('uygulama kendi kilit penceresine geçmez (kiosk yok)', !main.isKiosk())
     await sleep(600)
     await shot('h2-ara-seyirci', 'audience')
-    // Kilitle düğmesi de Windows kilidini ister
-    await clickButton('Kilitle')
-    await sleep(300)
-    check('ara şeridindeki Kilitle → Windows kilidi', breakLock.requests === locksAtStart + 2, { requests: breakLock.requests })
-    powerMonitor.emit('unlock-screen') // kullanıcı Windows kilidini parmak iziyle açtı
-    await sleep(500)
-    check('kilit açılınca ara ve sunum sürüyor', show.state.running && (await js<boolean>(`!!document.querySelector('.banner--break')`)))
+    check(
+      'arada sunum sürüyor, kilit düğmesi yok',
+      show.state.running &&
+        !main.isKiosk() &&
+        !(await js<boolean>(`[...document.querySelectorAll('.banner--break button')].some((b) => b.textContent.includes('Kilitle'))`))
+    )
     main.focus()
     press(main, 'A')
     await sleep(400)

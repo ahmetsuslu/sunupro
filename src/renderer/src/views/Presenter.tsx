@@ -243,10 +243,6 @@ export default function Presenter({ presentation: p, onClose, onSettings, inputB
     if (!running) return
     sendBreak(Date.now() + (settings?.breakMinutes ?? 10) * 60_000)
     timer.pause()
-    // Sınıfta açık bırakılmasın: kilit (parmak izi / PIN ile açılır), projeksiyonda geri sayım sürer
-    // Sınıfta açık bırakılmasın: Windows kilitlenir (parmak izi / PIN ile açılır). Kilit ekranı
-    // projeksiyonu da kaplar; açılınca sunum ve geri sayım kaldığı yerden sürer.
-    if (settings?.lockOnBreak ?? true) window.api.lock.windows('break')
   }
   const endBreak = (): void => {
     sendBreak(null)
@@ -453,9 +449,6 @@ export default function Presenter({ presentation: p, onClose, onSettings, inputB
             {new Date(breakUntil).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}
           </span>
           <div className="spacer" />
-          <button className="btn" onClick={() => window.api.lock.windows('button')} title="Windows'u kilitle (parmak izi / PIN ile açılır)">
-            Kilitle
-          </button>
           <button className="btn" onClick={() => extendBreak(-5)}>
             −5 dk
           </button>

@@ -11,7 +11,6 @@ import { flushLibrary, registerLibrary } from './library'
 import { flushSessions } from './sessions'
 import { registerUpdater } from './updater'
 import { log, logDir } from './log'
-import { registerLock } from './lock'
 import type { Settings } from '../shared/types'
 
 let mainWindow: BrowserWindow | null = null
@@ -95,8 +94,6 @@ app.whenReady().then(() => {
   registerCacheIpc()
   registerShow(() => mainWindow)
   registerLibrary(() => mainWindow)
-
-  registerLock(() => mainWindow)
 
   mainWindow = createMainWindow(show.displays().presenter)
   // Ana pencere kapanınca (katman açık olsa bile) uygulama kapanır

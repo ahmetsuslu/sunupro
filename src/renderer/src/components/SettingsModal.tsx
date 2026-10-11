@@ -101,21 +101,6 @@ function General(): React.JSX.Element {
       </label>
       <label className="setting">
         <div>
-          <strong>Arada Windows'u kilitle</strong>
-          <span>
-            Ara (A) başlayınca Windows kilitlenir; parmak izi ya da PIN ile açılır. Kilitliyken projeksiyonda Windows kilit
-            ekranı görünür; açınca sunum ve ara geri sayımı kaldığı yerden sürer.
-          </span>
-        </div>
-        <input
-          type="checkbox"
-          className="toggle"
-          checked={s.lockOnBreak}
-          onChange={(e) => updateSettings({ lockOnBreak: e.target.checked })}
-        />
-      </label>
-      <label className="setting">
-        <div>
           <strong>Çizimleri hatırla</strong>
           <span>Kalem ve vurgulayıcı çizimleri dosya bazında saklanır, sunu yeniden açılınca geri gelir.</span>
         </div>

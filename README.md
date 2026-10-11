@@ -45,12 +45,8 @@ PowerPoint'in sunucu görünümünde ders anlatırken eksik kalan noktalar için
   araç seçili değilken parmakla kaydırarak slayt değiştirme; fare tekerleğiyle ileri/geri.
 - **Ders kütüphanesi:** dersler, klasör bağlama (doğal sıralama: Hafta 1, 2, 10), arka planda ön
   hazırlık (ders anında açılış anlık), son açılanlar.
-- **Ara modu (`A`):** projeksiyonda geri sayım ve dönüş saati, süre sayacı durur.
-- **Arada kilit:** ara başlayınca Windows kilitlenir, **parmak izi / PIN (Windows Hello)** ile açılır.
-  Kilitliyken projeksiyonda Windows kilit ekranı görünür; açınca sunum ve ara geri sayımı kaldığı yerden
-  sürer. (Kendi içeriğini gösterirken Windows'u tam güvenle kilitleyebilen bir uygulama yapılamıyor:
-  görev çubuğu ve önizlemeleri her uygulamanın üstüne çıkabiliyor. Bu yüzden Windows'un kendi kilidi
-  kullanılır.) Sunum boyunca ekran uykuya geçmez.
+- **Ara modu (`A`):** projeksiyonda geri sayım ve dönüş saati, süre sayacı durur. Sunum boyunca ekran
+  kendiliğinden kararmaz.
 - **Ekranlar:** seyirci ekranını seçme, ekranları değiştirme, projeksiyon kablosu çıkarsa gösteriyi
   gizleme ve takılınca kaldığı yerden sürme; tek ekranda test modu.
 - **Atanabilir kısayollar:** her eyleme birden çok tuş (sunum kumandasının düğmeleri dahil), çakışma

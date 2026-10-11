@@ -51,10 +51,6 @@ const api = {
     forgetRecent: (path: string): Promise<LibraryView> => ipcRenderer.invoke('library:forget-recent', path),
     onChange: (cb: (view: LibraryView) => void): (() => void) => sub('library:changed', cb)
   },
-  // Ara kilidi: Windows'un kendi kilidi (parmak izi / PIN ile açılır)
-  lock: {
-    windows: (reason?: string): Promise<void> => ipcRenderer.invoke('lock:windows', reason)
-  },
   ink: {
     load: (path: string): Promise<InkMap | null> => ipcRenderer.invoke('ink:load', path),
     save: (path: string, ink: InkMap): Promise<void> => ipcRenderer.invoke('ink:save', path, ink)

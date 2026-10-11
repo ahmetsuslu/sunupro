@@ -187,8 +187,6 @@ export type Settings = {
   rememberInk: boolean
   /** Fare tekerleği: aşağı → sonraki, yukarı → önceki */
   wheelNavigation: boolean
-  /** Ara başlayınca Windows'u kilitle (parmak izi / PIN ile açılır) */
-  lockOnBreak: boolean
   autoUpdate: boolean
 }
 
