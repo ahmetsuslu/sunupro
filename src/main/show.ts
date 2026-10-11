@@ -18,7 +18,7 @@ import { PptError, ppt } from './pptctl'
 import { physicalCenter, pickAudienceDisplay, pickPresenterDisplay } from './displays'
 import { connectPorts, createOverlayWindow, fitToDisplay } from './windows'
 import { loadSettings, saveSettings } from './store'
-import { getSession, markRecent, saveSession, setPresented } from './sessions'
+import { getSession, saveSession, setPresented } from './sessions'
 import { log } from './log'
 import {
   ShowScreen,
@@ -199,7 +199,6 @@ class ShowController {
       openedCopy: !!info.openedCopy,
       session: getSession(path)
     }
-    markRecent(path)
     return this.presentation
   }
 

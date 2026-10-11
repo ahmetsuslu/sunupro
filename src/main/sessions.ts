@@ -5,18 +5,14 @@ import { join } from 'path'
 import { JsonFile } from './json-file'
 import type { FileSession, InkMap } from '../shared/types'
 
-const RECENT_MAX = 12
-
 type SessionData = {
   /** Dosya yolu (küçük harf) → son konum */
   positions: Record<string, FileSession & { path: string }>
-  /** Son açılan dosyalar (yeniden eskiye) */
-  recent: string[]
   /** Sunuldu olarak işaretlenen dosyalar: yol (küçük harf) → işaretlenme zamanı */
   presented: Record<string, { path: string; at: number }>
 }
 
-const file = new JsonFile<SessionData>('sessions.json', () => ({ positions: {}, recent: [], presented: {} }))
+const file = new JsonFile<SessionData>('sessions.json', () => ({ positions: {}, presented: {} }))
 
 const keyOf = (path: string): string => path.toLowerCase()
 
@@ -31,21 +27,6 @@ export function saveSession(path: string, pos: Omit<FileSession, 'updatedAt'>): 
   const prev = data.positions[keyOf(path)]
   if (prev && prev.slide === pos.slide && prev.click === pos.click && prev.slideCount === pos.slideCount) return
   file.set({ ...data, positions: { ...data.positions, [keyOf(path)]: { ...pos, path, updatedAt: Date.now() } } })
-}
-
-export function markRecent(path: string): void {
-  const data = file.get()
-  const recent = [path, ...data.recent.filter((p) => keyOf(p) !== keyOf(path))].slice(0, RECENT_MAX)
-  file.set({ ...data, recent })
-}
-
-export function recentFiles(): string[] {
-  return file.get().recent
-}
-
-export function forgetRecent(path: string): void {
-  const data = file.get()
-  file.set({ ...data, recent: data.recent.filter((p) => keyOf(p) !== keyOf(path)) })
 }
 
 export function presentedAt(path: string): number | null {

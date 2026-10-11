@@ -3,7 +3,7 @@ import { randomUUID } from 'crypto'
 import { existsSync, readdirSync, statSync } from 'fs'
 import { basename, dirname, join } from 'path'
 import { JsonFile } from './json-file'
-import { forgetRecent, getSession, loadInk, presentedAt, recentFiles, saveInk, setPresented } from './sessions'
+import { getSession, loadInk, presentedAt, saveInk, setPresented } from './sessions'
 import { friendlyError, isPrepared, show } from './show'
 import type { Course, FileStatus, InkMap, LibraryCourse, LibraryFile, LibraryView, Timetable } from '../shared/types'
 import { defaultTimetable, sanitizeTimetable } from '../shared/timetable'
@@ -159,13 +159,7 @@ export function libraryView(): LibraryView {
     folderMissing: !!c.folder && !existsSync(c.folder),
     items: files.map((f) => toFile(f, !!c.folder && sameFile(dirname(f), c.folder)))
   }))
-  const recent = recentFiles()
-    .filter((p) => existsSync(p))
-    .map((p) => {
-      const course = list.find((c) => c.items.some((i) => sameFile(i.path, p)))
-      return { ...toFile(p, false), courseId: course?.id ?? null, courseName: course?.name ?? null }
-    })
-  return { courses: list, recent, timetable: timetable() }
+  return { courses: list, timetable: timetable() }
 }
 
 function allFiles(): string[] {
@@ -288,11 +282,6 @@ export function registerLibrary(getMain: () => BrowserWindow | null): void {
 
   ipcMain.handle('library:retry', (_e, path: string) => {
     preparer.retry(path)
-    return view()
-  })
-
-  ipcMain.handle('library:forget-recent', (_e, path: string) => {
-    forgetRecent(path)
     return view()
   })
 

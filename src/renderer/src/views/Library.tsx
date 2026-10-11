@@ -87,8 +87,6 @@ export default function Library({ onOpen, onSettings, error, onDismissError }: P
     if (path) onOpen(path)
   }
 
-  // Sunuldu olarak işaretlenmiş (bitmiş) sunu "kaldığın yerden devam" önerilmez
-  const resume = view?.recent.find((r) => r.session && !r.presentedAt) ?? null
   // Derste sıradaki sunu: sunulmamış ilk dosya
   const nextPath = course?.items.find((f) => !f.presentedAt && f.status !== 'missing')?.path ?? null
   const doneCount = course?.items.filter((f) => f.presentedAt).length ?? 0
@@ -193,25 +191,16 @@ export default function Library({ onOpen, onSettings, error, onDismissError }: P
               </button>
             </div>
 
-            {view && <TodayPanel view={view} now={now} onOpen={onOpen} onCourse={(id) => openCourse(id)} />}
-
-            {resume ? (
-              <section className="resume-card" onClick={() => onOpen(resume.path)}>
-                <div className="resume-card__label">Kaldığın yerden devam</div>
-                <div className="resume-card__name">{resume.name}</div>
-                <div className="resume-card__meta">
-                  {resume.courseName && <span>{resume.courseName} · </span>}
-                  Slayt {resume.session!.slide} / {resume.session!.slideCount} · {timeAgo(resume.session!.updatedAt)}
-                </div>
-                <Progress session={resume.session} />
-                <button className="btn btn--primary btn--lg resume-card__btn">▶ Devam et</button>
-              </section>
-            ) : (
+            {/* Ana sayfada yalnızca günün dersleri ve sunuları; program yoksa nasıl başlanacağı */}
+            {view && view.timetable.slots.length > 0 && (
+              <TodayPanel view={view} now={now} onOpen={onOpen} onCourse={(id) => openCourse(id)} />
+            )}
+            {view && !view.courses.length && (
               <section className="lib-empty">
-                <h2>Derslerini düzenle, kaldığın yerden devam et</h2>
+                <h2>Derslerini ekle, programını oluştur</h2>
                 <p>
-                  Soldan bir ders oluştur ve sunularını ekle ya da ders klasörünü bağla. Bir sunuyu açtığında hangi
-                  slaytta kaldığın otomatik kaydedilir.
+                  Soldan bir ders oluştur ve sunularını ekle ya da ders klasörünü bağla. Ders programını oluşturduğunda
+                  bugünün dersleri ve sıradaki sunuları burada görünür.
                 </p>
                 <div className="lib-empty__actions">
                   <button className="btn btn--primary btn--lg" onClick={() => setDialog({ kind: 'create' })}>
@@ -224,31 +213,14 @@ export default function Library({ onOpen, onSettings, error, onDismissError }: P
                 <p className="hint">PowerPoint dosyasını bu pencereye sürükleyip bırakarak da açabilirsin.</p>
               </section>
             )}
-
-            {!!view?.recent.length && (
-              <section>
-                <h3 className="lib-section-title">Son açılanlar</h3>
-                <div className="file-list">
-                  {view.recent.map((f) => (
-                    <FileRow
-                      key={f.path}
-                      file={f}
-                      subtitle={f.courseName ?? undefined}
-                      onOpen={() => onOpen(f.path)}
-                      actions={
-                        <button
-                          className="icon-btn"
-                          title="Listeden kaldır"
-                          onClick={async (e) => {
-                            e.stopPropagation()
-                            setView(await window.api.library.forgetRecent(f.path))
-                          }}
-                        >
-                          ✕
-                        </button>
-                      }
-                    />
-                  ))}
+            {view && !!view.courses.length && !view.timetable.slots.length && (
+              <section className="lib-empty">
+                <h2>Ders programını oluştur</h2>
+                <p>Derslerini haftalık programa yerleştirdiğinde bugünün dersleri ve sıradaki sunuları burada görünür.</p>
+                <div className="lib-empty__actions">
+                  <button className="btn btn--primary btn--lg" onClick={openTimetable}>
+                    Ders programını aç
+                  </button>
                 </div>
               </section>
             )}
@@ -423,7 +395,6 @@ function TodayPanel({
   onOpen: (path: string) => void
   onCourse: (id: string) => void
 }): React.JSX.Element | null {
-  if (!view.timetable.slots.length) return null
   const today = todayEntries(view, now)
   const next = today.some((e) => e.state !== 'past') ? null : nextDayEntry(view, now)
   const nextFile = next && nextPresentation(next.course)
@@ -505,6 +476,13 @@ function TodayCard({
           {file ? (
             <>
               Sunu: <strong>{stripExt(file.name)}</strong>
+              {/* Yarıda bırakılan sunu: açınca kaldığı slayttan devam önerilir */}
+              {file.session && file.session.slide > 1 && (
+                <span>
+                  {' '}
+                  · kaldığın yer: slayt {file.session.slide} / {file.session.slideCount}
+                </span>
+              )}
             </>
           ) : course.items.length ? (
             'Tüm sunular sunuldu'
@@ -563,7 +541,6 @@ function Progress({ session }: { session: LibraryFile['session'] }): React.JSX.E
 function FileRow({
   file,
   index,
-  subtitle,
   next,
   handle,
   dragging,
@@ -574,7 +551,6 @@ function FileRow({
 }: {
   file: LibraryFile
   index?: number
-  subtitle?: string
   /** Derste sıradaki (sunulmamış ilk) sunu */
   next?: boolean
   /** Sürükleyerek sıralama tutamacı (yalnızca ders listesinde) */
@@ -610,7 +586,6 @@ function FileRow({
         </div>
         <div className="file-row__meta">
           {next && <span className="next-badge">Sıradaki</span>}
-          {subtitle && <span>{subtitle} · </span>}
           {done ? (
             <span className="file-row__done" title={`İşaretlendi: ${new Date(file.presentedAt!).toLocaleString('tr-TR')}`}>
               ✓ Sunuldu

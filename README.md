@@ -44,8 +44,8 @@ PowerPoint'in sunucu görünümünde ders anlatırken eksik kalan noktalar için
 - **Dokunmatik, kalem ve fare:** parmakla çizim, kalem (stylus) basıncı, kalemin silgi ucu, avuç reddi,
   araç seçili değilken parmakla kaydırarak slayt değiştirme; fare tekerleğiyle ileri/geri.
 - **Ders kütüphanesi:** dersler, klasör bağlama (doğal sıralama: Hafta 1, 2, 10), arka planda ön
-  hazırlık (ders anında açılış anlık), son açılanlar; sunular tutamaçtan tutup sürükleyerek (fare ya
-  da parmakla) sıralanır.
+  hazırlık (ders anında açılış anlık); sunular tutamaçtan tutup sürükleyerek (fare ya da parmakla)
+  sıralanır.
 - **Haftalık ders programı:** gün × ders saati ızgarasında dersleri yerleştir (gün, saat, derslik, sınıf);
   ders saatleri, günler ve sınıflar (ad + renk; ön lisans, lisans, tıp şablonları) özelleştirilebilir.
   Dersler sol menüde günlere göre, saat sırasıyla listelenir; ana sayfadaki **Bugün** bölümü bugünün

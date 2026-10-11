@@ -144,52 +144,6 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.lib-section-title {
-  margin: 28px 0 10px;
-  font-size: 13px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--text-muted);
-}
-
-.resume-card {
-  position: relative;
-  padding: 24px 28px;
-  border-radius: 16px;
-  background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 30%, var(--bg-panel)), var(--bg-panel) 70%);
-  border: 1px solid color-mix(in srgb, var(--accent) 40%, var(--border));
-  cursor: pointer;
-}
-.resume-card:hover {
-  border-color: var(--accent);
-}
-.resume-card__label {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--accent-hover);
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-}
-.resume-card__name {
-  margin: 6px 0 4px;
-  font-size: 24px;
-  font-weight: 650;
-  padding-right: 180px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.resume-card__meta {
-  color: var(--text-secondary);
-  margin-bottom: 14px;
-}
-.resume-card__btn {
-  position: absolute;
-  right: 28px;
-  top: 50%;
-  transform: translateY(-50%);
-}
 .lib-empty {
   padding: 32px;
   border-radius: 16px;

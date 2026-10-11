@@ -636,6 +636,12 @@ Start-Sleep -Milliseconds 150; [void][M]::SetCursorPos($old.X, $old.Y)`
       today.card === 'Test Dersi' && !!today.file?.includes('Hafta 2') && today.side === 'Pazartesi · bugün' && today.sub === '10:30 · C201',
       today
     )
+    check(
+      'ana sayfada yalnızca günün dersleri (devam kartı ve son açılanlar yok)',
+      await js<boolean>(
+        `!!document.querySelector('.today') && !document.querySelector('.lib-home .file-list') && !/Kaldığın yerden devam|Son açılanlar/i.test(document.querySelector('.lib-home').innerText)`
+      )
+    )
     await shot('t2-bugun', 'presenter')
     await setNow('new Date(2026, 9, 11, 15, 0).getTime()') // Pazar
     await sleep(300)
@@ -688,6 +694,8 @@ Start-Sleep -Milliseconds 150; [void][M]::SetCursorPos($old.X, $old.Y)`
     await js(`document.querySelector('button[title="Sunuyu kapat"]')?.click()`)
     await waitFor(() => !show.presentation, 5000)
     await sleep(800)
+    await clickButton('Test Dersi') // ana sayfada son açılanlar yok: dersten aç
+    await sleep(400)
     await js(`[...document.querySelectorAll('.file-row')].find((r) => r.textContent.includes('ornek-sunu')).click()`)
     await waitFor(() => show.presentation?.name === 'ornek-sunu.pptx', 15000)
     await sleep(1500)

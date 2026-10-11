@@ -90,8 +90,6 @@ export type LibraryCourse = Omit<Course, 'files'> & {
 
 export type LibraryView = {
   courses: LibraryCourse[]
-  /** Son açılanlar (yeniden eskiye) */
-  recent: (LibraryFile & { courseId: string | null; courseName: string | null })[]
   /** Haftalık ders programı */
   timetable: Timetable
 }

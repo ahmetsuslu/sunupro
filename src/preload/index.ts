@@ -51,7 +51,6 @@ const api = {
     moveFile: (id: string, path: string, delta: number): Promise<LibraryView> =>
       ipcRenderer.invoke('library:move-file', id, path, delta),
     retry: (path: string): Promise<LibraryView> => ipcRenderer.invoke('library:retry', path),
-    forgetRecent: (path: string): Promise<LibraryView> => ipcRenderer.invoke('library:forget-recent', path),
     /** Sunuldu işareti koy/kaldır */
     setPresented: (paths: string[], presented: boolean): Promise<LibraryView> =>
       ipcRenderer.invoke('library:set-presented', paths, presented),
