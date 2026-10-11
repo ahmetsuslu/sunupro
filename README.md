@@ -47,9 +47,10 @@ PowerPoint'in sunucu görünümünde ders anlatırken eksik kalan noktalar için
   hazırlık (ders anında açılış anlık), son açılanlar.
 - **Ara modu (`A`):** projeksiyonda geri sayım ve dönüş saati, süre sayacı durur.
 - **Arada kilit:** ara başlayınca bilgisayarın ekranı kilitlenir, **parmak izi / PIN (Windows Hello)** ile
-  açılır; projeksiyonda geri sayım sürer. Kilit aşılmaya çalışılırsa (Başlat, Alt+Tab, Görev
-  Yöneticisi, dokunmatik kenar hareketleri, uygulamayı kapatma...) Windows'un kendi kilidi devreye girer;
-  Windows kilidi açılınca Sunu Pro da açılır. Sunum boyunca ekran uykuya geçmez.
+  açılır; projeksiyonda geri sayım sürer. Kilitliyken Windows tuşu, Alt+Tab, Ctrl+Esc, Ctrl+Shift+Esc ve
+  Alt+F4 çalışmaz (açık pencerelerin önizlemesi görünmez). Kilit başka bir yoldan aşılmaya çalışılırsa
+  (Görev Yöneticisi, dokunmatik/dokunmatik yüzey hareketleri, uygulamayı kapatma...) Windows'un kendi kilidi
+  devreye girer; Windows kilidi açılınca Sunu Pro da açılır. Sunum boyunca ekran uykuya geçmez.
 - **Ekranlar:** seyirci ekranını seçme, ekranları değiştirme, projeksiyon kablosu çıkarsa gösteriyi
   gizleme ve takılınca kaldığı yerden sürme; tek ekranda test modu.
 - **Atanabilir kısayollar:** her eyleme birden çok tuş (sunum kumandasının düğmeleri dahil), çakışma

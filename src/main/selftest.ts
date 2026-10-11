@@ -505,6 +505,66 @@ Start-Sleep -Milliseconds 150; [void][M]::SetCursorPos($old.X, $old.Y)`
     await sleep(600)
     await shot('h2-ara-seyirci', 'audience')
     await shot('h2-kilit-sunucu', 'presenter')
+    // Klavye engeli: kilitliyken Alt+Tab (pencere önizlemeleri) ve Windows tuşu hiçbir şey açmamalı
+    breakLock.blockedKeys.length = 0
+    runPs(
+      outDir,
+      'tuslar.ps1',
+      `Add-Type -TypeDefinition @"
+using System; using System.Runtime.InteropServices;
+public static class K { [DllImport("user32.dll")] public static extern void keybd_event(byte vk, byte s, uint f, UIntPtr e); }
+"@
+[K]::keybd_event(0x12, 0, 0, [UIntPtr]::Zero); [K]::keybd_event(0x09, 0, 0, [UIntPtr]::Zero)
+Start-Sleep -Milliseconds 400
+[K]::keybd_event(0x09, 0, 2, [UIntPtr]::Zero); [K]::keybd_event(0x12, 0, 2, [UIntPtr]::Zero)
+Start-Sleep -Milliseconds 300
+[K]::keybd_event(0x5B, 0, 0, [UIntPtr]::Zero); [K]::keybd_event(0x5B, 0, 2, [UIntPtr]::Zero)`
+    )
+    await sleep(1200)
+    check(
+      'kilitliyken Alt+Tab ve Windows tuşu engellenir (önizleme/Başlat açılmaz)',
+      breakLock.blockedKeys.includes('Alt+Tab') && breakLock.blockedKeys.includes('Windows') && !breakLock.get().windowsLocked,
+      { blocked: breakLock.blockedKeys, state: breakLock.get() }
+    )
+    // "Parmak iziyle aç": Windows Hello penceresi kilit penceresinin üstünde ve odaklı açılmalı
+    // (odakta değilse parmak izi okunmaz). Test isteği iptal eder; kilit sürer.
+    void js(`document.querySelector('.lock-screen__btn').click()`)
+    await sleep(2500)
+    const helloFg = runPs(
+      outDir,
+      'onplan.ps1',
+      `Add-Type -TypeDefinition @"
+using System; using System.Runtime.InteropServices;
+public static class F { [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow(); [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr h, out uint p); }
+"@
+$p = 0; [void][F]::GetWindowThreadProcessId([F]::GetForegroundWindow(), [ref]$p); (Get-Process -Id $p).ProcessName`
+    )
+    await shot('h3-parmak-izi-istemi', 'presenter')
+    check('Parmak iziyle aç → Windows Hello penceresi öne gelir (odakta)', helloFg === 'CredentialUIBroker', helloFg)
+    breakLock.cancelVerify()
+    for (let i = 0; i < 30 && !(await js<boolean>(`!!document.querySelector('.lock-screen__status')`)); i++) await sleep(200)
+    await waitFor(() => breakLock.lastVerifyResult !== null, 4000)
+    // Test sırasında biri gerçekten parmak izini okutursa sonuç "Verified" olur ve kilit açılır; o da doğru
+    const verifyOutcome = breakLock.lastVerifyResult
+    check(
+      'Windows Hello sonucu uygulamaya ulaşır (iptal → kilit sürer + bilgi; parmak izi → açılır)',
+      verifyOutcome === 'Verified'
+        ? !breakLock.get().locked
+        : verifyOutcome === 'Canceled' && breakLock.get().locked && (await js<boolean>(`!!document.querySelector('.lock-screen__status')`)),
+      { verifyOutcome, state: breakLock.get() }
+    )
+    // Kilit doğru açılınca (parmak izi doğrulandı) gözcü kapanırken Windows'u kilitlememeli
+    const locksBefore = breakLock.guardLocks
+    if (breakLock.get().locked) breakLock.unlock('selftest')
+    await sleep(1500)
+    check('kilit doğru açılınca Windows kilidi devreye girmez', breakLock.guardLocks === locksBefore && !breakLock.get().locked, {
+      locksBefore,
+      after: breakLock.guardLocks
+    })
+    breakLock.lock()
+    await waitFor(() => breakLock.get().hello !== null, 10_000)
+    main.focus()
+    await sleep(1600) // gözcünün başlangıç beklemesi dolsun
     // Kilidi aşma denemesi: başka bir pencere öne gelir → gözcü Windows kilidini devreye sokmalı
     spawn(
       'powershell.exe',

@@ -15,6 +15,12 @@ class BreakLock {
   private guard: ChildProcessWithoutNullStreams | null = null
   private state: LockState = { locked: false, hello: null, windowsLocked: false }
   private verifyWaiter: ((result: string) => void) | null = null
+  /** Kilitliyken engellenen sistem kısayolları (günlük ve test için) */
+  blockedKeys: string[] = []
+  /** Gözcünün Windows kilidini devreye soktuğu durum sayısı (test için) */
+  guardLocks = 0
+  /** Son Windows Hello sonucu (test için) */
+  lastVerifyResult: string | null = null
 
   constructor(private getMain: () => BrowserWindow | null) {
     powerMonitor.on('unlock-screen', () => {
@@ -58,13 +64,30 @@ class BreakLock {
   }
 
   private startGuard(): void {
-    const args = ['-NoLogo', '-NoProfile', '-NonInteractive', '-STA', '-ExecutionPolicy', 'Bypass', '-File', this.scriptPath(), '-AppPid', String(process.pid)]
+    const main = this.getMain()
+    const hwnd = main ? Number(main.getNativeWindowHandle().readBigUInt64LE()) : 0
+    const args = [
+      '-NoLogo',
+      '-NoProfile',
+      '-NonInteractive',
+      // MTA: Windows Hello sonucu (WinRT tamamlanma bildirimi) iş parçacığı havuzunda gelir. STA'da ana
+      // döngü mesaj işlemediği için sonuç hiç ulaşmıyordu (parmak izi okunsa da kilit açılmıyordu).
+      '-MTA',
+      '-ExecutionPolicy',
+      'Bypass',
+      '-File',
+      this.scriptPath(),
+      '-AppPid',
+      String(process.pid),
+      '-AppHwnd',
+      String(hwnd)
+    ]
     if (process.env['SUNU_LOCK_DRYRUN']) args.push('-DryRun')
     const guard = spawn('powershell.exe', args, { windowsHide: true })
     this.guard = guard
     guard.stderr.on('data', (d: Buffer) => log('[gözcü]', d.toString()))
     createInterface({ input: guard.stdout }).on('line', (line) => {
-      let msg: { event?: string; hello?: string; result?: string; reason?: string }
+      let msg: { event?: string; hello?: string; result?: string; reason?: string; key?: string }
       try {
         msg = JSON.parse(line)
       } catch {
@@ -80,8 +103,14 @@ class BreakLock {
       } else if (msg.event === 'verify') {
         this.verifyWaiter?.(msg.result ?? 'Error')
         this.verifyWaiter = null
+      } else if (msg.event === 'cancel') {
+        log('[kilit] Windows Hello iptal:', JSON.stringify(msg))
+      } else if (msg.event === 'blocked') {
+        log('[kilit] engellenen kısayol:', msg.key)
+        this.blockedKeys.push(msg.key ?? '')
       } else if (msg.event === 'locked') {
         log('[kilit] gözcü Windows kilidini devreye soktu:', msg.reason)
+        this.guardLocks++
         this.setState({ windowsLocked: true })
       }
     })
@@ -103,12 +132,25 @@ class BreakLock {
     if (!this.state.locked) return 'Verified'
     if (!this.guard) return 'Error'
     if (this.verifyWaiter) return 'Busy'
+    // İstek kilit penceresine bağlanır: Windows Hello penceresi onun üstünde açılır ve odağı alır
+    // (bağlanmazsa arka planda kalır, parmak izi okunmaz)
+    const main = this.getMain()
+    const hwnd = main ? Number(main.getNativeWindowHandle().readBigUInt64LE()) : 0
     const result = await new Promise<string>((resolve) => {
       this.verifyWaiter = resolve
-      this.guard!.stdin.write(JSON.stringify({ cmd: 'verify', message: 'Sunu Pro kilidini açmak için kimliğinizi doğrulayın' }) + '\n')
+      this.guard!.stdin.write(
+        JSON.stringify({ cmd: 'verify', hwnd, message: 'Sunu Pro kilidini açmak için kimliğinizi doğrulayın' }) + '\n'
+      )
     })
+    log('[kilit] Windows Hello sonucu:', result)
+    this.lastVerifyResult = result
     if (result === 'Verified') this.unlock('verified')
     return result
+  }
+
+  /** Süren Windows Hello isteğini iptal eder (kilit sürer) */
+  cancelVerify(): void {
+    this.guard?.stdin.write(JSON.stringify({ cmd: 'cancel' }) + '\n')
   }
 
   unlock(reason: string): void {
