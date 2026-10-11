@@ -8,9 +8,10 @@ const DEFAULTS: Settings = {
   showMode: 'live',
   notesFontSize: 20,
   shortcuts: {},
-  ink: { penColor: '#e53935', penSize: 1, hlColor: '#ffeb3b', hlSize: 1 },
+  ink: { penColor: '#e53935', penSize: 1, hlColor: '#ffeb3b', hlSize: 1, laserColor: '#ff2a2a', laserSize: 1 },
   breakMinutes: 10,
   rememberInk: false,
+  wheelNavigation: true,
   autoUpdate: true
 }
 
@@ -24,7 +25,9 @@ export function loadSettings(): Settings {
   if (cache) return cache
   try {
     const raw = readFileSync(filePath(), 'utf-8')
-    cache = { ...DEFAULTS, ...(JSON.parse(raw) as Partial<Settings>) }
+    const saved = JSON.parse(raw) as Partial<Settings>
+    // İç içe ayarlar da birleştirilir: yeni sürümde eklenen alanlar (ör. lazer rengi) varsayılanla gelir
+    cache = { ...DEFAULTS, ...saved, ink: { ...DEFAULTS.ink, ...saved.ink } }
   } catch {
     cache = { ...DEFAULTS }
   }

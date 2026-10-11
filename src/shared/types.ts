@@ -129,7 +129,8 @@ export type InkMap = Record<number, InkStroke[]>
 
 /** presenter → katman (MessagePort) mesajları. Koordinatlar slayta göre 0..1. */
 export type OverlayMsg =
-  | { t: 'laser'; x: number; y: number }
+  /** size: nokta yarıçapı, slayt yüksekliğine oranla */
+  | { t: 'laser'; x: number; y: number; color: string; size: number }
   | { t: 'laser-off' }
   /** Tüm çizimler (bağlantı kurulunca / tümü silinince) */
   | { t: 'ink-all'; ink: InkMap }
@@ -141,6 +142,14 @@ export type OverlayMsg =
   | { t: 'live-cancel'; id: string }
   /** Ara modu: seyirci ekranında geri sayım (until: bitiş zamanı, ms) ya da kapat (null) */
   | { t: 'break'; until: number | null }
+  /** Yakınlaştırma görünümü (sunucuda iki parmakla / Ctrl+tekerlek) */
+  | ({ t: 'view' } & ZoomViewState)
+
+/**
+ * Yakınlaştırma: s ölçek (1 = tüm slayt), (cx, cy) görünen bölgenin merkezi (slayta göre 0..1).
+ * Slayt noktası (x, y) ekranda (0.5 + (x - cx)·s, 0.5 + (y - cy)·s) konumuna düşer.
+ */
+export type ZoomViewState = { s: number; cx: number; cy: number }
 
 export type InkPrefs = {
   penColor: string
@@ -148,6 +157,9 @@ export type InkPrefs = {
   penSize: number
   hlColor: string
   hlSize: number
+  laserColor: string
+  /** LASER_SIZES içindeki sıra */
+  laserSize: number
 }
 
 export type DisplayInfo = {
@@ -173,6 +185,8 @@ export type Settings = {
   breakMinutes: number
   /** Çizimleri dosya bazında sakla ve sunu yeniden açılınca geri getir */
   rememberInk: boolean
+  /** Fare tekerleği: aşağı → sonraki, yukarı → önceki */
+  wheelNavigation: boolean
   autoUpdate: boolean
 }
 

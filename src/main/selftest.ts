@@ -53,6 +53,7 @@ export async function runSelfTest(main: BrowserWindow, outDir: string): Promise<
   const check = (name: string, ok: boolean, detail?: unknown): void => {
     checks.push({ name, ok, detail })
   }
+  const js = <T>(code: string): Promise<T> => main.webContents.executeJavaScript(code) as Promise<T>
   const shot = async (name: string, which: 'audience' | 'presenter'): Promise<void> => {
     const d = which === 'audience' ? show.displays().audience : show.displays().presenter
     await captureDisplay(d, join(outDir, `${name}.png`))
@@ -231,6 +232,129 @@ Start-Sleep -Milliseconds 150; [void][M]::SetCursorPos($old.X, $old.Y)`
     press(main, 'Return')
     await sleep(300)
     check('Shift+Delete + onay → tüm çizimler silindi', (await inkCount(2)) === 0)
+
+    // Z — Fare tekerleği, Ctrl+tekerlek, iki parmakla yakınlaştırma/kaydırma, lazer rengi/boyutu
+    // Dokunma ve tekerlek Chrome DevTools protokolüyle gerçek giriş olayı olarak gönderilir
+    const dbg = main.webContents.debugger
+    if (!dbg.isAttached()) dbg.attach('1.3')
+    const cdp = (method: string, params: Record<string, unknown>): Promise<unknown> => dbg.sendCommand(method, params)
+    const at = (nx: number, ny: number): { x: number; y: number } => ({ x: st.x + nx * st.w, y: st.y + ny * st.h })
+    const wheel = (nx: number, ny: number, deltaY: number, modifiers = 0): Promise<unknown> =>
+      cdp('Input.dispatchMouseEvent', { type: 'mouseWheel', ...at(nx, ny), deltaX: 0, deltaY, modifiers })
+    const touch = (type: 'touchStart' | 'touchMove' | 'touchEnd', pts: { x: number; y: number }[]): Promise<unknown> =>
+      cdp('Input.dispatchTouchEvent', {
+        type,
+        touchPoints: pts.map((p, i) => ({ x: p.x, y: p.y, id: i, radiusX: 3, radiusY: 3, force: 0.5 }))
+      })
+    const view = (): Promise<{ s: number; cx: number; cy: number }> => js(`window.__sunuZoom.get()`)
+    const pos = (): string => `${show.state.slide}.${show.state.click}`
+    const pinch = async (from: number, to: number, steps = 10): Promise<void> => {
+      const c = at(0.5, 0.5)
+      const pts = (d: number): { x: number; y: number }[] => [
+        { x: c.x - d, y: c.y },
+        { x: c.x + d, y: c.y }
+      ]
+      await touch('touchStart', pts(from))
+      for (let i = 1; i <= steps; i++) {
+        await touch('touchMove', pts(from + ((to - from) * i) / steps))
+        await sleep(16)
+      }
+      await touch('touchEnd', [])
+      await sleep(250)
+    }
+
+    press(main, '0')
+    await sleep(200)
+    const p0 = pos()
+    await wheel(0.5, 0.5, 120)
+    await waitFor(() => pos() !== p0, 3000)
+    const p1 = pos()
+    await sleep(400)
+    await wheel(0.5, 0.5, -120)
+    await waitFor(() => pos() === p0, 3000)
+    check('tekerlek aşağı → ileri, yukarı → geri', p1 !== p0 && pos() === p0, { p0, p1, p2: pos() })
+
+    await wheel(0.3, 0.3, -400, 2) // Ctrl+tekerlek
+    await sleep(400)
+    const vw = await view()
+    check('Ctrl+tekerlek → imlecin olduğu yere yakınlaşır, slayt değişmez', vw.s > 1.5 && vw.cx < 0.5 && pos() === p0, { vw, pos: pos() })
+    press(main, 'Escape')
+    await sleep(300)
+    check('Esc → yakınlaştırma sıfırlandı', (await view()).s === 1)
+
+    await pinch(60, 180)
+    const vp = await view()
+    check('iki parmakla büyütme (~3x)', vp.s > 2.5 && vp.s < 3.5, vp)
+    await js(`!!document.querySelector('.chip--zoom')`).then((b) => check('üst çubukta yakınlaştırma yüzdesi', b === true))
+    await sleep(1500) // seyirci ekranında gösteri yakalaması hazırlansın
+    await shot('z1-yakinlastirma-seyirci', 'audience')
+    await shot('z1-yakinlastirma-sunucu', 'presenter')
+
+    const beforePan = await view()
+    const center = at(0.5, 0.5)
+    await touch('touchStart', [center])
+    for (let i = 1; i <= 10; i++) {
+      await touch('touchMove', [{ x: center.x - 25 * i, y: center.y }])
+      await sleep(16)
+    }
+    await touch('touchEnd', [])
+    await sleep(300)
+    const afterPan = await view()
+    check('yakınken tek parmak kaydırır, slayt değiştirmez', afterPan.cx > beforePan.cx + 0.03 && pos() === p0, {
+      beforePan,
+      afterPan,
+      pos: pos()
+    })
+
+    // Yakınken çizim: sahne ortasındaki nokta slaytta görünümün merkezine kaydedilmeli
+    press(main, '3')
+    await sleep(200)
+    const zv = await view()
+    const slideNow = show.state.slide ?? 2
+    await drag(line(0.5, 0.5, 0.56, 0.52, 6).map(([x, y]) => [x, y] as [number, number]))
+    const first = (await js<number[]>(`window.__sunuInk.get(${slideNow}).slice(-1)[0].points[0]`)) ?? [0, 0]
+    check('yakınken çizim doğru slayt konumuna kaydedilir', Math.hypot(first[0] - zv.cx, first[1] - zv.cy) < 0.01, { first, zv })
+    await shot('z2-yakinken-cizim-seyirci', 'audience')
+    press(main, 'Z', ['control'])
+    press(main, '0')
+    await sleep(200)
+
+    await pinch(180, 50)
+    const vr = await view()
+    check('uzaklaştırınca tam boyuta oturur (kaydırma kapanır)', vr.s === 1, vr)
+    const pBeforeSwipe = pos()
+    await touch('touchStart', [at(0.7, 0.5)])
+    for (let i = 1; i <= 8; i++) {
+      await touch('touchMove', [at(0.7 - 0.05 * i, 0.5)])
+      await sleep(16)
+    }
+    await touch('touchEnd', [])
+    await waitFor(() => pos() !== pBeforeSwipe, 3000)
+    check('tam boyutta parmakla kaydırma yine slayt değiştirir', pos() !== pBeforeSwipe, { pBeforeSwipe, after: pos() })
+
+    // Lazer rengi ve boyutu: araç çubuğundan seçim + R ile sonraki renk
+    press(main, '1')
+    await sleep(200)
+    await js(`document.querySelector('.palette .swatch[title="Yeşil"]').click()`)
+    await js(`document.querySelector('.palette .size-btn[title="Büyük"]').click()`)
+    await sleep(300)
+    const ink1 = await js<{ laserColor: string; laserSize: number }>(`window.api.settings.get().then((s) => s.ink)`)
+    check('lazer rengi ve boyutu seçilebiliyor', ink1.laserColor === '#22e05a' && ink1.laserSize === 2, ink1)
+    for (let i = 0; i <= 12; i++) {
+      main.webContents.sendInputEvent({ type: 'mouseMove', x: Math.round(st.x + (0.3 + 0.03 * i) * st.w), y: Math.round(st.y + 0.6 * st.h) })
+      await sleep(16)
+    }
+    await sleep(40)
+    await shot('z3-lazer-yesil-buyuk', 'audience')
+    const dotColor = await js<string>(`document.querySelector('.laser-dot').style.getPropertyValue('--laser')`)
+    check('sunucudaki lazer noktası seçilen renkte', dotColor === '#22e05a', dotColor)
+    press(main, 'R')
+    await sleep(300)
+    const ink2 = await js<{ laserColor: string }>(`window.api.settings.get().then((s) => s.ink)`)
+    check('lazer seçiliyken R → sonraki lazer rengi', ink2.laserColor === '#2a8cff', ink2)
+    press(main, '0')
+    await sleep(200)
+
     press(main, '1') // sonraki adımlar bir araç seçili bekliyor (lazer)
     await sleep(200)
     await shot('p2-lazer', 'presenter')
@@ -315,7 +439,6 @@ Start-Sleep -Milliseconds 150; [void][M]::SetCursorPos($old.X, $old.Y)`
     check('kullanıcının belgesi açık kaldı', still.startsWith('ACIK'), still)
 
     // H — Kütüphane, ön hazırlık, kaldığın yerden devam, ara modu, çizim saklama (arayüz üzerinden)
-    const js = <T>(code: string): Promise<T> => main.webContents.executeJavaScript(code) as Promise<T>
     const clickButton = (text: string): Promise<boolean> =>
       js(`(() => { const b = [...document.querySelectorAll('button')].find((x) => x.textContent.includes(${JSON.stringify(text)})); b?.click(); return !!b })()`)
     type View = { courses: { id: string; items: { name: string; status: string; session: { slide: number } | null }[] }[] }
@@ -415,7 +538,7 @@ Start-Sleep -Milliseconds 150; [void][M]::SetCursorPos($old.X, $old.Y)`
     const s2 = await shortcuts()
     check('çakışma: onay sorup 2 lazere taşındı', asked && JSON.stringify(s2.toolLaser) === '["1","L","2"]' && JSON.stringify(s2.toolHighlighter) === '[]', s2)
     const escLocked = await js<boolean>(
-      `(() => { const row = [...document.querySelectorAll('.shortcut-row')].find((r) => r.textContent.includes('araç yoksa sunumu bitir')); return row.querySelector('.key-chip button').disabled })()`
+      `(() => { const row = [...document.querySelectorAll('.shortcut-row')].find((r) => r.textContent.includes('yoksa sunumu bitir')); return row.querySelector('.key-chip button').disabled })()`
     )
     check('zorunlu eylemin tek tuşu kaldırılamıyor (Esc)', escLocked)
     press(main, 'Escape')

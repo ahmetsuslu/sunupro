@@ -35,11 +35,14 @@ PowerPoint'in sunucu görünümünde ders anlatırken eksik kalan noktalar için
   üstünde Sunu Pro'nun şeffaf çizim katmanı durur. Yedek olarak animasyonsuz **görsel mod**.
 - **Sunucu ekranı:** gösterinin canlı yansıması (animasyon adımı dahil), sonraki slayt ve kalan
   animasyon adımı, büyütülebilir notlar, geçen süre (duraklat/sıfırla), saat, slayt ızgarası.
-- **İşaretleme:** iz bırakan lazer, yarı saydam vurgulayıcı, basınca duyarlı kalem, silgi; renk ve
-  kalınlık seçimi; slayt başına geri al/yinele; çizimler slayta bağlıdır (slayt değişince saklanır,
-  dönünce geri gelir); istenirse dosya bazında kalıcı.
-- **Dokunmatik ve kalem:** parmakla çizim, kalem (stylus) basıncı, kalemin silgi ucu, avuç reddi,
-  araç seçili değilken parmakla kaydırarak slayt değiştirme.
+- **İşaretleme:** iz bırakan lazer (renk ve boyut seçilebilir), yarı saydam vurgulayıcı, basınca
+  duyarlı kalem, silgi; renk ve kalınlık seçimi; slayt başına geri al/yinele; çizimler slayta bağlıdır
+  (slayt değişince saklanır, dönünce geri gelir); istenirse dosya bazında kalıcı.
+- **Yakınlaştırma:** iki parmakla büyüt/küçült ve kaydır (ya da Ctrl+tekerlek, `+` / `-`); projeksiyona
+  aynen yansır, animasyon durumu korunur, çizimler net kalır. Tam boyuta dönünce parmakla slayt
+  değiştirme yeniden çalışır.
+- **Dokunmatik, kalem ve fare:** parmakla çizim, kalem (stylus) basıncı, kalemin silgi ucu, avuç reddi,
+  araç seçili değilken parmakla kaydırarak slayt değiştirme; fare tekerleğiyle ileri/geri.
 - **Ders kütüphanesi:** dersler, klasör bağlama (doğal sıralama: Hafta 1, 2, 10), arka planda ön
   hazırlık (ders anında açılış anlık), son açılanlar.
 - **Ara modu (`A`):** projeksiyonda geri sayım ve dönüş saati, süre sayacı durur.
@@ -90,9 +93,11 @@ Hepsi **Ayarlar → Kısayollar**'dan değiştirilebilir.
 | Tüm çizimleri sil (onaylı) | Shift+Delete |
 | Siyah / beyaz ekran | B veya . / W veya , |
 | Slayt ızgarası | G |
+| Yakınlaştır / uzaklaştır / tüm slayt | + / - / Z (ayrıca iki parmak, Ctrl+tekerlek) |
+| Fare tekerleği | aşağı: ileri, yukarı: geri (Ayarlar'dan kapatılabilir) |
 | Ara modu | A |
 | Sunumu baştan / bu slayttan başlat | F5 / Shift+F5 |
-| Aracı bırak; araç yoksa sunumu bitir (onaylı) | Esc |
+| Geri çık: arayı / aracı / yakınlaştırmayı kapat; yoksa sunumu bitir (onaylı) | Esc |
 
 ## Sorun giderme
 

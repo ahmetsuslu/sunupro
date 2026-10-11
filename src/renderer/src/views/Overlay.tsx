@@ -1,33 +1,89 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { ShowScreen, type AudienceConfig, type InkMap, type ShowState } from '@shared/types'
-import { containRect } from '../lib/geometry'
+import { ShowScreen, type AudienceConfig, type InkMap, type ShowState, type ZoomViewState } from '@shared/types'
+import { containRect, type Rect } from '../lib/geometry'
 import { onOverlayMessage } from '../lib/overlay-port'
 import { InkRenderer } from '../lib/ink-render'
 import { formatCountdown } from '../lib/time'
 import { slideUrl } from '../lib/slides'
 import { fillStroke, type StrokePoint } from '../lib/stroke'
+import { withAlpha } from '../lib/tools'
+import { IDENTITY, isZoomed, zoomRect } from '../lib/zoom'
 
 const TRAIL_MS = 600
 
 type TrailPoint = { x: number; y: number; t: number }
 
 /**
+ * Seyirci ekranındaki yakınlaştırma görünümü. Sunucudan gelen görünüm canlı modda ancak gösterinin
+ * yakalaması hazır olunca uygulanır (yoksa çizimler büyür ama slayt büyümez); görsel modda hemen.
+ * Saniyede onlarca güncelleme olabildiği için React durumu yerine aboneliklerle dağıtılır.
+ */
+class ViewHub {
+  requested: ZoomViewState = IDENTITY
+  mirrorReady = false
+  needsMirror = false
+  private listeners = new Set<(v: ZoomViewState) => void>()
+
+  effective(): ZoomViewState {
+    return this.needsMirror && !this.mirrorReady ? IDENTITY : this.requested
+  }
+  subscribe(cb: (v: ZoomViewState) => void): () => void {
+    this.listeners.add(cb)
+    cb(this.effective())
+    return () => this.listeners.delete(cb)
+  }
+  emit(): void {
+    const v = this.effective()
+    for (const cb of this.listeners) cb(v)
+  }
+}
+
+/** Pencerede slaytın kapladığı (letterbox'lı) dikdörtgen */
+function useSlideRect(aspect: number): Rect {
+  const calc = (): Rect => containRect(window.innerWidth, window.innerHeight, aspect)
+  const [rect, setRect] = useState(calc)
+  useEffect(() => {
+    const onResize = (): void => setRect(calc())
+    onResize()
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [aspect])
+  return rect
+}
+
+/**
  * Seyirci ekranı penceresi.
- * - Canlı mod: tamamen şeffaf; PowerPoint gösterisinin üstünde yalnızca lazer/çizimler görünür.
+ * - Canlı mod: şeffaf; PowerPoint gösterisinin üstünde yalnızca lazer/çizimler görünür. Yakınlaştırmada
+ *   gösteri penceresinin canlı yakalaması büyütülerek gösterilir (animasyon durumu korunur).
  * - Görsel mod: slayt görselini kendisi gösterir (siyah/beyaz ekran dahil).
  * Slayt, PowerPoint gibi ekrana ortalanarak sığdırılır; işaretçi koordinatları slayta göre 0..1 gelir.
  */
 export default function Overlay(): React.JSX.Element {
   const [config, setConfig] = useState<AudienceConfig | null>(null)
   const [state, setState] = useState<ShowState>({ running: false })
+  const [hub] = useState(() => new ViewHub())
 
   useEffect(() => window.api.audience.onConfig(setConfig), [])
   useEffect(() => {
     window.api.show.getState().then(setState)
     return window.api.show.onState(setState)
   }, [])
+  useEffect(
+    () =>
+      onOverlayMessage((m) => {
+        if (m.t !== 'view') return
+        hub.requested = { s: m.s, cx: m.cx, cy: m.cy }
+        hub.emit()
+      }),
+    [hub]
+  )
 
   const image = config?.mode === 'image'
+  const liveMirror = !!config && config.mode === 'live' && !config.windowed
+  useEffect(() => {
+    hub.needsMirror = liveMirror
+    hub.emit()
+  }, [hub, liveMirror])
   useEffect(() => {
     const root = document.documentElement
     root.classList.toggle('overlay-root', !image)
@@ -37,24 +93,117 @@ export default function Overlay(): React.JSX.Element {
 
   const slide = state.slide ?? 1
   const aspect = config?.aspect ?? 16 / 9
+  const rect = useSlideRect(aspect)
   // Siyah/beyaz ekranda çizimler ve lazer de gizlenir
   const blank = state.state === ShowScreen.Black || state.state === ShowScreen.White
   return (
     <div className="audience">
+      {/* Slayt çerçevesi: yakınlaştırılan içerik slaytın kendi alanında kırpılır (sunucu ekranıyla aynı) */}
+      <div className="audience__frame" style={{ left: rect.x, top: rect.y, width: rect.width, height: rect.height }}>
+        {image && config && state.running && <ZoomedImage hub={hub} rect={rect} src={slideUrl(config.cacheKey, slide)} />}
+        {liveMirror && state.running && <ZoomMirror hub={hub} rect={rect} aspect={aspect} />}
+      </div>
       {image && config && state.running && (
         <>
-          <img className="audience__slide" src={slideUrl(config.cacheKey, slide)} alt="" draggable={false} />
           {/* Sonraki slaytı önceden yükle: geçiş anında beyaz kare olmasın */}
           <img className="audience__preload" src={slideUrl(config.cacheKey, Math.min(slide + 1, state.slideCount ?? slide))} alt="" />
           {state.state === ShowScreen.Black && <div className="audience__screen audience__screen--black" />}
           {state.state === ShowScreen.White && <div className="audience__screen audience__screen--white" />}
         </>
       )}
-      <InkLayer aspect={aspect} slide={slide} hidden={blank} />
-      <LaserLayer aspect={aspect} hidden={blank} />
+      <InkLayer aspect={aspect} slide={slide} hidden={blank} hub={hub} />
+      <LaserLayer aspect={aspect} hidden={blank} hub={hub} />
       <BreakScreen />
     </div>
   )
+}
+
+/** Görsel mod: slayt görseli, yakınlaştırmaya göre büyütülüp kaydırılır. */
+function ZoomedImage({ hub, rect, src }: { hub: ViewHub; rect: Rect; src: string }): React.JSX.Element {
+  const ref = useRef<HTMLImageElement>(null)
+  useEffect(
+    () =>
+      hub.subscribe((v) => {
+        const el = ref.current
+        if (!el) return
+        const z = zoomRect({ x: 0, y: 0, width: rect.width, height: rect.height }, v)
+        el.style.transform = isZoomed(v) ? `translate(${z.x}px, ${z.y}px) scale(${v.s})` : ''
+      }),
+    [hub, rect.width, rect.height]
+  )
+  return <img ref={ref} className="audience__slide" src={src} alt="" draggable={false} />
+}
+
+/**
+ * Canlı mod yakınlaştırması: PowerPoint gösteri penceresinin canlı yakalaması (katman hariç) büyütülüp
+ * gösterinin üstüne konur. Yakalama ilk yakınlaştırmada başlar, gösteri boyunca açık kalır.
+ */
+function ZoomMirror({ hub, rect, aspect }: { hub: ViewHub; rect: Rect; aspect: number }): React.JSX.Element {
+  const videoRef = useRef<HTMLVideoElement>(null)
+  const startedRef = useRef(false)
+
+  useEffect(() => {
+    let stream: MediaStream | null = null
+    let cancelled = false
+    const video = videoRef.current!
+
+    const place = (v: ZoomViewState): void => {
+      const fw = video.videoWidth
+      const fh = video.videoHeight
+      if (!isZoomed(v) || !fw) {
+        video.style.opacity = '0'
+        return
+      }
+      // Karedeki slayt bölgesi, yakınlaştırılmış slayt dikdörtgenine (çerçeveye göre) oturtulur
+      const z = zoomRect({ x: 0, y: 0, width: rect.width, height: rect.height }, v)
+      const s = containRect(fw, fh, aspect)
+      const k = z.width / s.width
+      video.style.width = `${fw}px`
+      video.style.height = `${fh}px`
+      video.style.transform = `translate(${z.x - s.x * k}px, ${z.y - s.y * k}px) scale(${k})`
+      video.style.opacity = '1'
+    }
+
+    const start = (): void => {
+      if (startedRef.current) return
+      startedRef.current = true
+      navigator.mediaDevices
+        .getDisplayMedia({ video: { frameRate: 30 }, audio: false })
+        .then((st) => {
+          if (cancelled) return st.getTracks().forEach((t) => t.stop())
+          stream = st
+          video.srcObject = st
+          video.requestVideoFrameCallback(() => {
+            hub.mirrorReady = true
+            hub.emit()
+          })
+        })
+        .catch((err) => {
+          startedRef.current = false
+          console.warn('Yakınlaştırma için gösteri yakalanamadı:', err)
+        })
+    }
+
+    const offView = hub.subscribe(place)
+    // Yakalamayı istenen görünüme göre başlat (etkin görünüm yakalama hazır olana dek 1'de kalır)
+    const offReq = (() => {
+      const check = (): void => {
+        if (isZoomed(hub.requested)) start()
+      }
+      check()
+      return onOverlayMessage((m) => m.t === 'view' && check())
+    })()
+    return () => {
+      cancelled = true
+      offView()
+      offReq()
+      stream?.getTracks().forEach((t) => t.stop())
+      hub.mirrorReady = false
+      startedRef.current = false
+    }
+  }, [hub, rect.width, rect.height, aspect])
+
+  return <video ref={videoRef} className="audience__mirror" autoPlay muted style={{ opacity: 0 }} />
 }
 
 /** Ara modu: gösterinin üstünü kaplayan geri sayım ekranı. */
@@ -91,8 +240,8 @@ function BreakScreen(): React.JSX.Element | null {
   )
 }
 
-/** Lazer: parıltılı nokta + solan iz. Yalnızca hareket varken çizer (boşta CPU harcamaz). */
-function LaserLayer({ aspect, hidden }: { aspect: number; hidden: boolean }): React.JSX.Element {
+/** Lazer: parıltılı nokta + solan iz (seçilen renk ve boyutta). Yalnızca hareket varken çizer. */
+function LaserLayer({ aspect, hidden, hub }: { aspect: number; hidden: boolean; hub: ViewHub }): React.JSX.Element {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const aspectRef = useRef(aspect)
   aspectRef.current = aspect
@@ -101,6 +250,9 @@ function LaserLayer({ aspect, hidden }: { aspect: number; hidden: boolean }): Re
     const canvas = canvasRef.current!
     const ctx = canvas.getContext('2d')!
     let laser: { x: number; y: number } | null = null
+    let color = '#ff2a2a'
+    let size = 0.011
+    let view = hub.effective()
     const trail: TrailPoint[] = []
     let raf = 0
 
@@ -114,12 +266,17 @@ function LaserLayer({ aspect, hidden }: { aspect: number; hidden: boolean }): Re
     const draw = (): void => {
       raf = 0
       const now = performance.now()
-      const r = containRect(canvas.width, canvas.height, aspectRef.current)
+      const base = containRect(canvas.width, canvas.height, aspectRef.current)
+      const r = zoomRect(base, view)
       ctx.clearRect(0, 0, canvas.width, canvas.height)
       while (trail.length && now - trail[0].t > TRAIL_MS) trail.shift()
 
+      ctx.save()
+      ctx.beginPath()
+      ctx.rect(base.x, base.y, base.width, base.height)
+      ctx.clip()
       const px = (p: { x: number; y: number }): [number, number] => [r.x + p.x * r.width, r.y + p.y * r.height]
-      const radius = Math.max(6, r.height * 0.011)
+      const radius = Math.max(4, r.height * size)
 
       // İz: kuyruğa doğru incelen tek parça şekil (basınç = noktanın tazeliği), uca doğru opaklaşan dolgu
       if (trail.length > 1) {
@@ -129,8 +286,8 @@ function LaserLayer({ aspect, hidden }: { aspect: number; hidden: boolean }): Re
         let reach = 1
         for (const [x, y] of pts) reach = Math.max(reach, Math.hypot(x - hx, y - hy))
         const fade = ctx.createRadialGradient(hx, hy, 0, hx, hy, reach)
-        fade.addColorStop(0, 'rgba(255, 40, 40, 0.6)')
-        fade.addColorStop(1, 'rgba(255, 40, 40, 0.05)')
+        fade.addColorStop(0, withAlpha(color, 0.6))
+        fade.addColorStop(1, withAlpha(color, 0.05))
         ctx.fillStyle = fade
         fillStroke(ctx, pts, {
           size: radius * 1.5,
@@ -145,14 +302,14 @@ function LaserLayer({ aspect, hidden }: { aspect: number; hidden: boolean }): Re
       if (laser) {
         const [x, y] = px(laser)
         const glow = ctx.createRadialGradient(x, y, 0, x, y, radius * 3)
-        glow.addColorStop(0, 'rgba(255, 60, 60, 0.9)')
-        glow.addColorStop(0.35, 'rgba(255, 30, 30, 0.45)')
-        glow.addColorStop(1, 'rgba(255, 0, 0, 0)')
+        glow.addColorStop(0, withAlpha(color, 0.9))
+        glow.addColorStop(0.35, withAlpha(color, 0.45))
+        glow.addColorStop(1, withAlpha(color, 0))
         ctx.fillStyle = glow
         ctx.beginPath()
         ctx.arc(x, y, radius * 3, 0, Math.PI * 2)
         ctx.fill()
-        ctx.fillStyle = '#ff2a2a'
+        ctx.fillStyle = color
         ctx.beginPath()
         ctx.arc(x, y, radius, 0, Math.PI * 2)
         ctx.fill()
@@ -161,6 +318,7 @@ function LaserLayer({ aspect, hidden }: { aspect: number; hidden: boolean }): Re
         ctx.arc(x, y, radius * 0.35, 0, Math.PI * 2)
         ctx.fill()
       }
+      ctx.restore()
       if (laser || trail.length) raf = requestAnimationFrame(draw)
     }
     const schedule = (): void => {
@@ -170,21 +328,28 @@ function LaserLayer({ aspect, hidden }: { aspect: number; hidden: boolean }): Re
     resize()
     window.addEventListener('resize', resize)
 
-    const off = onOverlayMessage((m) => {
+    const offMsg = onOverlayMessage((m) => {
       if (m.t === 'laser') {
         laser = { x: m.x, y: m.y }
+        color = m.color
+        size = m.size
         trail.push({ ...laser, t: performance.now() })
       } else if (m.t === 'laser-off') laser = null
       else return
       schedule()
     })
+    const offView = hub.subscribe((v) => {
+      view = v
+      schedule()
+    })
 
     return () => {
-      off()
+      offMsg()
+      offView()
       window.removeEventListener('resize', resize)
       if (raf) cancelAnimationFrame(raf)
     }
-  }, [])
+  }, [hub])
 
   return <canvas ref={canvasRef} className="overlay-canvas" style={{ visibility: hidden ? 'hidden' : 'visible' }} />
 }
@@ -193,7 +358,7 @@ function LaserLayer({ aspect, hidden }: { aspect: number; hidden: boolean }): Re
  * Kalem/vurgulayıcı çizimlerinin seyirci ekranındaki kopyası. Tüm slaytların çizimlerini tutar,
  * gösterilen slaytınkileri çizer; sunucuda çizilmekte olan çizgiyi anlık izler.
  */
-function InkLayer({ aspect, slide, hidden }: { aspect: number; slide: number; hidden: boolean }): React.JSX.Element {
+function InkLayer({ aspect, slide, hidden, hub }: { aspect: number; slide: number; hidden: boolean; hub: ViewHub }): React.JSX.Element {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const rendererRef = useRef<InkRenderer | null>(null)
   const inkRef = useRef<InkMap>({})
@@ -207,6 +372,7 @@ function InkLayer({ aspect, slide, hidden }: { aspect: number; slide: number; hi
     const onResize = (): void => r.resize()
     window.addEventListener('resize', onResize)
     r.setStrokes(inkRef.current[slideRef.current] ?? [])
+    const offView = hub.subscribe((v) => r.setView(v))
 
     const off = onOverlayMessage((m) => {
       switch (m.t) {
@@ -233,11 +399,12 @@ function InkLayer({ aspect, slide, hidden }: { aspect: number; slide: number; hi
     })
     return () => {
       off()
+      offView()
       window.removeEventListener('resize', onResize)
       r.dispose()
       rendererRef.current = null
     }
-  }, [aspect])
+  }, [aspect, hub])
 
   useEffect(() => {
     rendererRef.current?.clearLive()

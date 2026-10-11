@@ -1,6 +1,7 @@
 import type { StrokeOptions } from 'perfect-freehand'
-import type { InkPoint, InkStroke } from '@shared/types'
+import type { InkPoint, InkStroke, ZoomViewState } from '@shared/types'
 import { containRect, type Rect } from './geometry'
+import { IDENTITY, zoomRect } from './zoom'
 import { fillStroke } from './stroke'
 import { HIGHLIGHTER_ALPHA } from './tools'
 
@@ -68,6 +69,7 @@ export class InkRenderer {
   private cacheDirty = true
   private raf = 0
   private hidden = false
+  private view: ZoomViewState = IDENTITY
 
   constructor(
     private canvas: HTMLCanvasElement,
@@ -94,9 +96,16 @@ export class InkRenderer {
     this.schedule()
   }
 
-  /** Slayt dikdörtgeni (CSS pikseli) — isabet testi için */
+  /** Yakınlaştırma: çizgiler büyütülmüş görünüme göre yeniden (net) çizilir */
+  setView(view: ZoomViewState): void {
+    this.view = view
+    this.cacheDirty = true
+    this.schedule()
+  }
+
+  /** Slayt dikdörtgeni (CSS pikseli, yakınlaştırma dahil) — isabet testi için */
   slideRectCss(): Rect {
-    return containRect(this.canvas.clientWidth || 1, this.canvas.clientHeight || 1, this.aspect)
+    return zoomRect(containRect(this.canvas.clientWidth || 1, this.canvas.clientHeight || 1, this.aspect), this.view)
   }
 
   setStrokes(strokes: InkStroke[]): void {
@@ -145,16 +154,29 @@ export class InkRenderer {
   private draw(): void {
     this.raf = 0
     const { width, height } = this.canvas
-    const r = containRect(width, height, this.aspect)
+    const base = containRect(width, height, this.aspect)
+    const r = zoomRect(base, this.view)
+    // Yakınlaştırmada çizimler slaytın kendi alanında kırpılır (letterbox'a taşmaz)
+    const clip = (c: CanvasRenderingContext2D): void => {
+      c.beginPath()
+      c.rect(base.x, base.y, base.width, base.height)
+      c.clip()
+    }
     if (this.cacheDirty) {
       const c = this.cache.getContext('2d')!
       c.clearRect(0, 0, width, height)
+      c.save()
+      clip(c)
       for (const s of this.strokes) drawInkStroke(c, s, r)
+      c.restore()
       this.cacheDirty = false
     }
     this.ctx.clearRect(0, 0, width, height)
     if (this.hidden) return
     this.ctx.drawImage(this.cache, 0, 0)
+    this.ctx.save()
+    clip(this.ctx)
     for (const s of this.live.values()) drawInkStroke(this.ctx, s, r, false)
+    this.ctx.restore()
   }
 }

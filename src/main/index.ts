@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, net, protocol, shell } from 'electron'
+import { app, BrowserWindow, ipcMain, Menu, net, protocol, shell } from 'electron'
 import { existsSync, readdirSync, rmSync, statSync } from 'fs'
 import { join } from 'path'
 import { pathToFileURL } from 'url'
@@ -82,6 +82,9 @@ app.whenReady().then(() => {
   })
 
   log(`Sunu Pro ${app.getVersion()} başladı`)
+  // Electron'un varsayılan menüsü gizli olsa da kısayolları çalışır: Ctrl+R ders sırasında arayüzü
+  // yeniden yükleyip bellekteki çizimleri siler, Ctrl+−/= sayfayı büyütür → kurulu sürümde kapat
+  if (app.isPackaged) Menu.setApplicationMenu(null)
   ipcMain.handle('app:version', () => app.getVersion())
   ipcMain.handle('shell:open-external', (_e, url: string) => {
     if (/^https:\/\//i.test(url)) return shell.openExternal(url)

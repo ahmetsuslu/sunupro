@@ -369,6 +369,13 @@ kbd {
   box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6), inset 0 0 0 1px rgba(0, 0, 0, 0.6);
   pointer-events: none;
 }
+/* Yakınlaştırmada görüntü (görsel + canlı yansıma) bu kapla büyür; dönüşüm JS ile verilir */
+.stage__content {
+  position: absolute;
+  inset: 0;
+  transform-origin: 0 0;
+  pointer-events: none;
+}
 .stage__img {
   position: absolute;
   inset: 0;
@@ -387,8 +394,21 @@ kbd {
   margin: -8px 0 0 -8px;
   border-radius: 50%;
   background: var(--laser);
-  box-shadow: 0 0 12px 4px rgba(255, 40, 40, 0.6);
+  box-shadow: 0 0 12px 4px color-mix(in srgb, var(--laser) 60%, transparent);
   pointer-events: none;
+}
+.chip--zoom {
+  color: var(--accent-hover);
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+  background: transparent;
+}
+/* Araç çubuğunda lazer boyutu önizlemesi */
+.size-btn__glow {
+  width: var(--s);
+  height: var(--s);
+  border-radius: 50%;
+  background: var(--swatch);
+  box-shadow: 0 0 calc(var(--s) * 0.8) calc(var(--s) * 0.25) color-mix(in srgb, var(--swatch) 55%, transparent);
 }
 
 /* Sağ panel */
@@ -646,12 +666,27 @@ kbd {
   position: fixed;
   inset: 0;
 }
+/* Slaytın ekrandaki alanı; yakınlaştırılan içerik burada kırpılır */
+.audience__frame {
+  position: absolute;
+  overflow: hidden;
+  pointer-events: none;
+}
 .audience__slide {
   position: absolute;
-  inset: 0;
+  left: 0;
+  top: 0;
   width: 100%;
   height: 100%;
-  object-fit: contain;
+  transform-origin: 0 0;
+}
+/* Canlı modda yakınlaştırma: gösteri penceresinin yakalaması (boyut ve dönüşüm JS ile) */
+.audience__mirror {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform-origin: 0 0;
+  background: #000;
 }
 .audience__preload {
   position: absolute;

@@ -16,6 +16,9 @@ export type ActionId =
   | 'first'
   | 'last'
   | 'grid'
+  | 'zoomIn'
+  | 'zoomOut'
+  | 'zoomReset'
   | 'toolLaser'
   | 'toolHighlighter'
   | 'toolPen'
@@ -61,6 +64,9 @@ export const ACTIONS: ActionDef[] = [
   { id: 'first', label: 'İlk slayt', category: 'nav', defaults: ['Home'] },
   { id: 'last', label: 'Son slayt', category: 'nav', defaults: ['End'] },
   { id: 'grid', label: 'Slayt ızgarası', category: 'nav', defaults: ['G'] },
+  { id: 'zoomIn', label: 'Yakınlaştır', category: 'nav', defaults: ['+', 'Shift++'], repeat: true },
+  { id: 'zoomOut', label: 'Uzaklaştır', category: 'nav', defaults: ['-'], repeat: true },
+  { id: 'zoomReset', label: 'Yakınlaştırmayı sıfırla (tüm slayt)', category: 'nav', defaults: ['Z'] },
 
   { id: 'toolLaser', label: 'Lazer işaretçi', category: 'tools', defaults: ['1'] },
   { id: 'toolHighlighter', label: 'Vurgulayıcı', category: 'tools', defaults: ['2'] },
@@ -79,7 +85,13 @@ export const ACTIONS: ActionDef[] = [
   { id: 'break', label: 'Ara modu', category: 'screen', defaults: ['A'] },
   { id: 'startShow', label: 'Sunumu baştan başlat', category: 'screen', defaults: ['F5'] },
   { id: 'startHere', label: 'Sunumu bu slayttan başlat', category: 'screen', defaults: ['Shift+F5'] },
-  { id: 'escape', label: 'Aracı bırak; araç yoksa sunumu bitir', category: 'screen', defaults: ['Escape'], required: true }
+  {
+    id: 'escape',
+    label: 'Geri çık: arayı / aracı / yakınlaştırmayı kapat; yoksa sunumu bitir',
+    category: 'screen',
+    defaults: ['Escape'],
+    required: true
+  }
 ]
 
 export const ACTION_BY_ID = Object.fromEntries(ACTIONS.map((a) => [a.id, a])) as Record<ActionId, ActionDef>

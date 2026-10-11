@@ -1,10 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react'
-import type { InkPoint, InkPrefs, InkStroke, OverlayMsg, PresentationInfo, ShowState } from '@shared/types'
+import type { InkPoint, InkPrefs, InkStroke, OverlayMsg, PresentationInfo, ShowState, ZoomViewState } from '@shared/types'
 import { containRect, type Rect } from '../lib/geometry'
 import { slideUrl } from '../lib/slides'
-import { ERASER_RADIUS, HL_SIZES, PEN_SIZES, isDrawingTool, type Tool } from '../lib/tools'
+import { ERASER_RADIUS, HL_SIZES, LASER_SIZES, PEN_SIZES, isDrawingTool, type Tool } from '../lib/tools'
 import { InkRenderer, hitsStroke } from '../lib/ink-render'
 import type { InkStore } from '../lib/ink-store'
+import { MAX_ZOOM, SNAP_ZOOM, clampView, isZoomed, toSlide, zoomAt, type ZoomView } from '../lib/zoom'
 
 type Point = { x: number; y: number }
 
@@ -16,9 +17,11 @@ type Props = {
   tool: Tool
   ink: InkStore
   inkPrefs: InkPrefs
+  /** Yakınlaştırma durumu (iki parmak / Ctrl+tekerlek); seyirci ekranına Presenter aktarır */
+  zoom: ZoomView
   /** Siyah/beyaz ekranda çizimler gizlenir */
   hideInk: boolean
-  /** Lazer konumu katmana gönderilir; React durumu kullanılmaz (her harekette yeniden çizim gecikme yaratır) */
+  /** Lazer konumu (slayta göre) katmana gönderilir; React durumu kullanılmaz (gecikme yaratır) */
   onLaser: (pos: Point | null) => void
   /** Çizilmekte olan çizgiyi katmana anlık iletir */
   onOverlay: (msg: OverlayMsg) => void
@@ -29,19 +32,27 @@ const SWIPE_MIN_PX = 60
 /** Kalem ekrana değdikten sonra bu süre boyunca parmak dokunuşları yok sayılır (avuç) */
 const PALM_REJECT_MS = 800
 
-type Drawing = { pointerId: number; slide: number; stroke: InkStroke; rect: DOMRect }
-type Erasing = { pointerId: number; slide: number; group: string }
+type Drawing = { pointerId: number; pointerType: string; slide: number; stroke: InkStroke }
+type Erasing = { pointerId: number; pointerType: string; slide: number; group: string }
+type Gesture =
+  | { kind: 'pinch'; startDist: number; startMid: { u: number; w: number }; startView: ZoomViewState }
+  | { kind: 'pan'; pointerId: number; lastX: number; lastY: number }
 
 /**
  * Geçerli slayt (sunucu ekranı). Canlı modda PowerPoint gösterisinin canlı yansıması,
- * aksi halde önizleme görseli. Üstünde çizim katmanı; fare, parmak ve kalem girdisi
- * slayta göre normalize edilip katmana aktarılır.
+ * aksi halde önizleme görseli. Üstünde çizim katmanı; fare, parmak ve kalem girdisi slayta göre
+ * normalize edilip katmana aktarılır.
+ *
+ * Yakınlaştırma: iki parmakla büyüt/küçült + kaydır, Ctrl+tekerlekle imlecin olduğu yere yakınlaş.
+ * Yakınlaştırılmışken tek parmak (araç yokken) görüntüyü kaydırır, slayt değiştirmez; tam boyuta
+ * dönünce kaydırma kapanır ve parmakla slayt değiştirme yeniden çalışır.
  */
 export default function Stage(props: Props): React.JSX.Element {
-  const { presentation, state, slide, tool, ink, inkPrefs, hideInk, onLaser, onOverlay, onSwipe } = props
+  const { presentation, state, slide, tool, ink, inkPrefs, zoom, hideInk, onLaser, onOverlay, onSwipe } = props
   const aspect = presentation.widthPt / presentation.heightPt
   const areaRef = useRef<HTMLDivElement>(null)
   const stageRef = useRef<HTMLDivElement>(null)
+  const contentRef = useRef<HTMLDivElement>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
   const inkCanvasRef = useRef<HTMLCanvasElement>(null)
   const rendererRef = useRef<InkRenderer | null>(null)
@@ -50,6 +61,11 @@ export default function Stage(props: Props): React.JSX.Element {
   const swipeRef = useRef<{ id: number; x: number; y: number } | null>(null)
   const drawingRef = useRef<Drawing | null>(null)
   const erasingRef = useRef<Erasing | null>(null)
+  const gestureRef = useRef<Gesture | null>(null)
+  /** Aktif parmaklar (istemci koordinatı) */
+  const touchesRef = useRef(new Map<number, { x: number; y: number }>())
+  /** İki parmak hareketinden sonra tüm parmaklar kalkana dek tek parmak işlemi yapılmaz */
+  const gestureLockRef = useRef(false)
   const lastPenRef = useRef(0)
   const [area, setArea] = useState({ w: 0, h: 0 })
   const [frame, setFrame] = useState({ w: 0, h: 0 })
@@ -70,6 +86,7 @@ export default function Stage(props: Props): React.JSX.Element {
     const canvas = inkCanvasRef.current!
     const r = new InkRenderer(canvas, aspect)
     rendererRef.current = r
+    r.setView(zoom.get())
     const ro = new ResizeObserver(() => r.resize())
     ro.observe(canvas)
     return () => {
@@ -77,7 +94,7 @@ export default function Stage(props: Props): React.JSX.Element {
       r.dispose()
       rendererRef.current = null
     }
-  }, [aspect])
+  }, [aspect, zoom])
 
   useEffect(() => {
     const r = rendererRef.current
@@ -124,17 +141,63 @@ export default function Stage(props: Props): React.JSX.Element {
     videoStyle = { left: -s.x * k, top: -s.y * k, width: frame.w * k, height: frame.h * k }
   }
 
+  // ---------- Yakınlaştırma görünümü (React dışında, doğrudan DOM) ----------
+  const applyView = (v: ZoomViewState): void => {
+    const el = contentRef.current
+    const st = stageRef.current
+    if (el && st) {
+      const W = st.clientWidth
+      const H = st.clientHeight
+      el.style.transform = isZoomed(v)
+        ? `translate(${W / 2 - v.cx * W * v.s}px, ${H / 2 - v.cy * H * v.s}px) scale(${v.s})`
+        : ''
+    }
+    rendererRef.current?.setView(v)
+  }
+  useEffect(() => {
+    applyView(zoom.get())
+    return zoom.subscribe(applyView)
+  }, [zoom, stage.width, stage.height]) // boyut değişince dönüşüm yeniden hesaplanır
+
+  // Slayt değişince (ya da gösteri başlayıp bitince) tam boyuta dön
+  useEffect(() => zoom.reset(), [shown, state.running, zoom])
+
+  // Ctrl+tekerlek (ve dokunmatik yüzey kıstırma): imlecin olduğu yere yakınlaş. Düz tekerlek üst
+  // bileşene geçer (slayt değiştirme). Sayfa yakınlaştırmasını engellemek için pasif olmayan dinleyici.
+  useEffect(() => {
+    const el = stageRef.current
+    if (!el) return
+    const onWheel = (e: WheelEvent): void => {
+      if (!e.ctrlKey) return
+      e.preventDefault()
+      e.stopPropagation()
+      const r = el.getBoundingClientRect()
+      const v = zoom.get()
+      const next = zoomAt(v, v.s * Math.exp(-e.deltaY * 0.0025), (e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height)
+      if (next.s < 1.02) zoom.reset()
+      else zoom.set(next)
+    }
+    el.addEventListener('wheel', onWheel, { passive: false })
+    return () => el.removeEventListener('wheel', onWheel)
+  }, [zoom])
+
   // ---------- Lazer ----------
-  const laser = (pos: Point | null): void => {
+  /** u, w: sahne üzerindeki konum (0..1); katmana slayt koordinatı gider */
+  const laser = (pos: { u: number; w: number } | null): void => {
     const dot = dotRef.current
     if (dot) {
       dot.style.display = pos ? 'block' : 'none'
       if (pos) {
-        dot.style.left = `${pos.x * 100}%`
-        dot.style.top = `${pos.y * 100}%`
+        // Seçilen lazer rengi ve boyutu (yakınlaştırmada seyirci ekranıyla aynı oranda büyür)
+        const d = Math.max(8, (LASER_SIZES[inkPrefs.laserSize] ?? LASER_SIZES[1]) * 2 * (stageRef.current?.clientHeight ?? 0) * zoom.get().s)
+        dot.style.width = dot.style.height = `${d}px`
+        dot.style.margin = `${-d / 2}px 0 0 ${-d / 2}px`
+        dot.style.setProperty('--laser', inkPrefs.laserColor)
+        dot.style.left = `${pos.u * 100}%`
+        dot.style.top = `${pos.w * 100}%`
       }
     }
-    onLaser(pos)
+    onLaser(pos ? toSlide(pos.u, pos.w, zoom.get()) : null)
   }
   useEffect(() => {
     if (tool !== 'laser') laser(null)
@@ -159,10 +222,11 @@ export default function Stage(props: Props): React.JSX.Element {
   }
 
   // ---------- Girdi ----------
-  const norm = (rect: DOMRect, x: number, y: number): Point => ({
-    x: (x - rect.left) / rect.width,
-    y: (y - rect.top) / rect.height
-  })
+  /** İstemci koordinatı → sahne üzerindeki konum (0..1) */
+  const stagePos = (x: number, y: number): { u: number; w: number } => {
+    const r = stageRef.current!.getBoundingClientRect()
+    return { u: (x - r.left) / r.width, w: (y - r.top) / r.height }
+  }
 
   /** Kalem (stylus) araç seçili olmasa da çizer; kalemin silgi ucu her zaman siler. */
   const toolFor = (e: React.PointerEvent): Tool => {
@@ -173,11 +237,14 @@ export default function Stage(props: Props): React.JSX.Element {
     return tool
   }
 
-  const pointsOf = (e: React.PointerEvent, rect: DOMRect): InkPoint[] => {
+  /** Olaydaki tüm örnekler (coalesced), slayt koordinatına çevrilmiş */
+  const pointsOf = (e: React.PointerEvent): InkPoint[] => {
     const native = e.nativeEvent
     const list = typeof native.getCoalescedEvents === 'function' ? native.getCoalescedEvents() : []
+    const v = zoom.get()
     return (list.length ? list : [native]).map((ev) => {
-      const p = norm(rect, ev.clientX, ev.clientY)
+      const { u, w } = stagePos(ev.clientX, ev.clientY)
+      const p = toSlide(u, w, v)
       const pressure = ev.pointerType === 'pen' ? ev.pressure || 0.5 : 0.5
       return [p.x, p.y, pressure]
     })
@@ -185,28 +252,55 @@ export default function Stage(props: Props): React.JSX.Element {
 
   const eraseAt = (er: Erasing, clientX: number, clientY: number): void => {
     const st = stageRef.current!.getBoundingClientRect()
-    const rect: Rect = { x: 0, y: 0, width: st.width, height: st.height }
-    const px = clientX - st.left
-    const py = clientY - st.top
+    const rect = rendererRef.current?.slideRectCss() ?? { x: 0, y: 0, width: st.width, height: st.height }
     const radius = ERASER_RADIUS * st.height
     const ids = ink
       .get(er.slide)
-      .filter((s) => hitsStroke(s, px, py, radius, rect))
+      .filter((s) => hitsStroke(s, clientX - st.left, clientY - st.top, radius, rect))
       .map((s) => s.id)
     if (ids.length) ink.remove(er.slide, ids, er.group)
+  }
+
+  /** İkinci parmak değince: tek parmakla başlamış işi bırak, iki parmak hareketine geç */
+  const startPinch = (): void => {
+    const d = drawingRef.current
+    if (d && d.pointerType === 'touch') {
+      drawingRef.current = null
+      rendererRef.current?.cancelLive(d.stroke.id)
+      onOverlay({ t: 'live-cancel', id: d.stroke.id })
+    }
+    if (erasingRef.current?.pointerType === 'touch') erasingRef.current = null
+    if (tool === 'laser') laser(null)
+    swipeRef.current = null
+    const [a, b] = [...touchesRef.current.values()]
+    const mid = stagePos((a.x + b.x) / 2, (a.y + b.y) / 2)
+    gestureRef.current = {
+      kind: 'pinch',
+      startDist: Math.max(1, Math.hypot(a.x - b.x, a.y - b.y)),
+      startMid: mid,
+      startView: zoom.get()
+    }
+    gestureLockRef.current = true
   }
 
   const onPointerDown = (e: React.PointerEvent): void => {
     if (e.pointerType === 'pen') lastPenRef.current = performance.now()
     else if (e.pointerType === 'touch' && performance.now() - lastPenRef.current < PALM_REJECT_MS) return
-    if (drawingRef.current || erasingRef.current) return // başka bir parmak/kalem zaten çiziyor
+    const target = e.currentTarget as HTMLElement
+
+    if (e.pointerType === 'touch') {
+      target.setPointerCapture(e.pointerId) // parmak sahneden çıksa da hareket izlenir
+      touchesRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
+      if (touchesRef.current.size === 2) return startPinch()
+      if (touchesRef.current.size > 2 || gestureLockRef.current) return
+    }
+    if (drawingRef.current || erasingRef.current || gestureRef.current) return // başka bir işlem sürüyor
 
     const t = toolFor(e)
-    const target = e.currentTarget as HTMLElement
-    const rect = target.getBoundingClientRect()
+    const pos = stagePos(e.clientX, e.clientY)
 
     if (t === 'laser') {
-      laser(norm(rect, e.clientX, e.clientY))
+      laser(pos)
     } else if (isDrawingTool(t)) {
       target.setPointerCapture(e.pointerId)
       const pen = t === 'pen'
@@ -217,27 +311,61 @@ export default function Stage(props: Props): React.JSX.Element {
         color: pen ? inkPrefs.penColor : inkPrefs.hlColor,
         size: pen ? PEN_SIZES[inkPrefs.penSize] ?? PEN_SIZES[1] : HL_SIZES[inkPrefs.hlSize] ?? HL_SIZES[1],
         simulate: e.pointerType !== 'pen',
-        points: pointsOf(e, rect)
+        points: pointsOf(e)
       }
-      drawingRef.current = { pointerId: e.pointerId, slide: shown, stroke, rect }
+      drawingRef.current = { pointerId: e.pointerId, pointerType: e.pointerType, slide: shown, stroke }
       rendererRef.current?.beginLive(stroke)
       onOverlay({ t: 'live-begin', slide: shown, stroke })
     } else if (t === 'eraser') {
       target.setPointerCapture(e.pointerId)
-      const er: Erasing = { pointerId: e.pointerId, slide: shown, group: crypto.randomUUID() }
+      const er: Erasing = { pointerId: e.pointerId, pointerType: e.pointerType, slide: shown, group: crypto.randomUUID() }
       erasingRef.current = er
       ring(e)
       eraseAt(er, e.clientX, e.clientY)
-    } else if (t === 'none' && e.pointerType !== 'mouse') {
-      swipeRef.current = { id: e.pointerId, x: e.clientX, y: e.clientY }
+    } else if (t === 'none') {
+      if (isZoomed(zoom.get()) && e.pointerType !== 'pen') {
+        // Yakınlaştırılmışken sürükleme görüntüyü kaydırır (slayt değiştirmez)
+        target.setPointerCapture(e.pointerId)
+        gestureRef.current = { kind: 'pan', pointerId: e.pointerId, lastX: e.clientX, lastY: e.clientY }
+      } else if (e.pointerType !== 'mouse') {
+        swipeRef.current = { id: e.pointerId, x: e.clientX, y: e.clientY }
+      }
     }
   }
 
   const onPointerMove = (e: React.PointerEvent): void => {
     if (e.pointerType === 'pen') lastPenRef.current = performance.now()
+    if (e.pointerType === 'touch' && touchesRef.current.has(e.pointerId)) {
+      touchesRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
+    }
+
+    const g = gestureRef.current
+    if (g?.kind === 'pinch') {
+      if (touchesRef.current.size < 2) return
+      const [a, b] = [...touchesRef.current.values()]
+      const mid = stagePos((a.x + b.x) / 2, (a.y + b.y) / 2)
+      const s = Math.min(MAX_ZOOM, Math.max(1, (g.startView.s * Math.hypot(a.x - b.x, a.y - b.y)) / g.startDist))
+      // Başlangıçta parmakların ortasındaki slayt noktası, parmakların şimdiki ortasında kalır (büyüt + kaydır)
+      const p = toSlide(g.startMid.u, g.startMid.w, g.startView)
+      zoom.set(clampView({ s, cx: p.x - (mid.u - 0.5) / s, cy: p.y - (mid.w - 0.5) / s }))
+      return
+    }
+    if (g?.kind === 'pan' && g.pointerId === e.pointerId) {
+      const st = stageRef.current!
+      const v = zoom.get()
+      zoom.set({
+        ...v,
+        cx: v.cx - (e.clientX - g.lastX) / (st.clientWidth * v.s),
+        cy: v.cy - (e.clientY - g.lastY) / (st.clientHeight * v.s)
+      })
+      g.lastX = e.clientX
+      g.lastY = e.clientY
+      return
+    }
+
     const d = drawingRef.current
     if (d && d.pointerId === e.pointerId) {
-      const pts = pointsOf(e, d.rect)
+      const pts = pointsOf(e)
       d.stroke.points.push(...pts)
       rendererRef.current?.appendLive(d.stroke.id, pts)
       onOverlay({ t: 'live-pts', id: d.stroke.id, points: pts })
@@ -250,12 +378,26 @@ export default function Stage(props: Props): React.JSX.Element {
       for (const ev of list.length ? list : [e.nativeEvent]) eraseAt(er, ev.clientX, ev.clientY)
       return
     }
+    if (gestureLockRef.current) return
     const t = toolFor(e)
     if (t === 'eraser') ring(e)
-    else if (t === 'laser') laser(norm((e.currentTarget as HTMLElement).getBoundingClientRect(), e.clientX, e.clientY))
+    else if (t === 'laser') laser(stagePos(e.clientX, e.clientY))
   }
 
   const finish = (e: React.PointerEvent, cancelled: boolean): void => {
+    if (e.pointerType === 'touch') touchesRef.current.delete(e.pointerId)
+    const g = gestureRef.current
+    if (g?.kind === 'pinch' && touchesRef.current.size < 2) {
+      gestureRef.current = null
+      // Neredeyse tam boyuta dönüldüyse tam boyuta otur: kaydırma kapanır, parmakla slayt değişir
+      if (zoom.get().s < SNAP_ZOOM) zoom.reset()
+    }
+    if (touchesRef.current.size === 0) gestureLockRef.current = false
+    if (g?.kind === 'pan' && g.pointerId === e.pointerId) {
+      gestureRef.current = null
+      return
+    }
+
     const d = drawingRef.current
     if (d && d.pointerId === e.pointerId) {
       drawingRef.current = null
@@ -274,7 +416,7 @@ export default function Stage(props: Props): React.JSX.Element {
     if (toolFor(e) === 'laser' && e.pointerType !== 'mouse') laser(null)
     const sw = swipeRef.current
     swipeRef.current = null
-    if (cancelled || tool !== 'none' || !sw || sw.id !== e.pointerId) return
+    if (cancelled || tool !== 'none' || !sw || sw.id !== e.pointerId || isZoomed(zoom.get())) return
     const dx = e.clientX - sw.x
     const dy = e.clientY - sw.y
     if (Math.abs(dx) >= SWIPE_MIN_PX && Math.abs(dx) > Math.abs(dy) * 1.5) onSwipe(dx < 0 ? 'next' : 'prev')
@@ -291,20 +433,23 @@ export default function Stage(props: Props): React.JSX.Element {
         onPointerUp={(e) => finish(e, false)}
         onPointerCancel={(e) => finish(e, true)}
         onPointerLeave={(e) => {
-          if (tool === 'laser') laser(null)
+          if (tool === 'laser' && e.pointerType === 'mouse') laser(null)
           if (!erasingRef.current && e.pointerType === 'mouse') ring(null)
         }}
       >
-        <img className="stage__img" src={slideUrl(presentation.cacheKey, shown)} alt="" draggable={false} />
-        <video
-          ref={videoRef}
-          className="stage__video"
-          style={videoStyle}
-          autoPlay
-          muted
-          onLoadedMetadata={(e) => setFrame({ w: e.currentTarget.videoWidth, h: e.currentTarget.videoHeight })}
-          onResize={(e) => setFrame({ w: e.currentTarget.videoWidth, h: e.currentTarget.videoHeight })}
-        />
+        {/* Yakınlaştırmada görüntü bu kap ile büyür; çizimler ayrı tuvalde net çizilir */}
+        <div ref={contentRef} className="stage__content">
+          <img className="stage__img" src={slideUrl(presentation.cacheKey, shown)} alt="" draggable={false} />
+          <video
+            ref={videoRef}
+            className="stage__video"
+            style={videoStyle}
+            autoPlay
+            muted
+            onLoadedMetadata={(e) => setFrame({ w: e.currentTarget.videoWidth, h: e.currentTarget.videoHeight })}
+            onResize={(e) => setFrame({ w: e.currentTarget.videoWidth, h: e.currentTarget.videoHeight })}
+          />
+        </div>
         <canvas ref={inkCanvasRef} className="stage__ink" />
         <div ref={ringRef} className="eraser-ring" style={{ display: 'none' }} />
         <div ref={dotRef} className="laser-dot" style={{ display: 'none' }} />

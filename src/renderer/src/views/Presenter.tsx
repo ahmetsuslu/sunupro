@@ -10,7 +10,8 @@ import { onOverlayPort, post } from '../lib/overlay-port'
 import { firstVisible, lastVisible, nextVisible, prevVisible } from '../lib/slides'
 import { useKeyHint, useShortcuts, type ActionHandlers } from '../lib/use-shortcuts'
 import { formatDuration, useTimer } from '../lib/use-timer'
-import { COLOR_NAMES, HL_COLORS, PEN_COLORS, type Tool } from '../lib/tools'
+import { COLOR_NAMES, HL_COLORS, LASER_COLORS, LASER_SIZES, PEN_COLORS, type Tool } from '../lib/tools'
+import { SNAP_ZOOM, ZoomView, isZoomed, zoomAt } from '../lib/zoom'
 import { InkStore } from '../lib/ink-store'
 import { updateSettings, useSettings } from '../lib/settings'
 import { formatCountdown, timeAgo } from '../lib/time'
@@ -24,7 +25,14 @@ type Props = {
 }
 type Point = { x: number; y: number }
 
-const DEFAULT_INK: InkPrefs = { penColor: PEN_COLORS[0], penSize: 1, hlColor: HL_COLORS[0], hlSize: 1 }
+const DEFAULT_INK: InkPrefs = {
+  penColor: PEN_COLORS[0],
+  penSize: 1,
+  hlColor: HL_COLORS[0],
+  hlSize: 1,
+  laserColor: LASER_COLORS[0],
+  laserSize: 1
+}
 
 export default function Presenter({ presentation: p, onClose, onSettings, inputBlocked }: Props): React.JSX.Element {
   // Kaldığın yerden devam: dosyanın son konumu (baştaysa sormaya gerek yok)
@@ -49,12 +57,20 @@ export default function Presenter({ presentation: p, onClose, onSettings, inputB
   const timer = useTimer(state.running)
   const hint = useKeyHint()
   const settings = useSettings()
-  const prefs = settings?.ink ?? DEFAULT_INK
+  const prefs: InkPrefs = { ...DEFAULT_INK, ...settings?.ink }
+  const prefsRef = useRef(prefs)
+  prefsRef.current = prefs
   // Çizimler sunu boyunca bellekte; değişiklikler seyirci katmanına aktarılır
   const [ink] = useState(() => new InkStore())
   const [, bump] = useReducer((n: number) => n + 1, 0)
-  const testHook = window as unknown as { __sunuSelfTest?: boolean; __sunuInk?: InkStore }
-  if (testHook.__sunuSelfTest) testHook.__sunuInk = ink
+  // Yakınlaştırma: iki parmak / Ctrl+tekerlek / kısayollar; seyirci ekranına aynen yansır
+  const [zoom] = useState(() => new ZoomView())
+  const [zoomPct, setZoomPct] = useState(100)
+  const testHook = window as unknown as { __sunuSelfTest?: boolean; __sunuInk?: InkStore; __sunuZoom?: ZoomView }
+  if (testHook.__sunuSelfTest) {
+    testHook.__sunuInk = ink
+    testHook.__sunuZoom = zoom
+  }
 
   const toOverlay = useCallback((msg: OverlayMsg) => post(portRef.current, msg), [])
 
@@ -67,10 +83,29 @@ export default function Presenter({ presentation: p, onClose, onSettings, inputB
       onOverlayPort((port) => {
         portRef.current = port
         post(port, { t: 'ink-all', ink: ink.all() })
+        post(port, { t: 'view', ...zoom.get() })
         if (breakRef.current) post(port, { t: 'break', until: breakRef.current })
       }),
-    [ink]
+    [ink, zoom]
   )
+  // Görünüm her harekette katmana gider; üst çubuktaki yüzde ise seyrek güncellenir (yeniden çizim yükü)
+  useEffect(() => {
+    let timer: number | undefined
+    let shownZoomed = false
+    const off = zoom.subscribe((v) => {
+      post(portRef.current, { t: 'view', ...v })
+      const zoomed = isZoomed(v)
+      window.clearTimeout(timer)
+      if (zoomed !== shownZoomed) {
+        shownZoomed = zoomed
+        setZoomPct(Math.round(v.s * 100))
+      } else timer = window.setTimeout(() => setZoomPct(Math.round(zoom.get().s * 100)), 150)
+    })
+    return () => {
+      off()
+      window.clearTimeout(timer)
+    }
+  }, [zoom])
 
   // Çizimleri dosya bazında saklama (ayar açıksa): açılışta yükle, değişince kısa gecikmeyle kaydet
   const rememberInk = settings?.rememberInk ?? false
@@ -132,8 +167,30 @@ export default function Presenter({ presentation: p, onClose, onSettings, inputB
   }, [state.atEnd, showToast])
 
   const sendLaser = useCallback((pos: Point | null) => {
-    post(portRef.current, pos ? { t: 'laser', ...pos } : { t: 'laser-off' })
+    const { laserColor, laserSize } = prefsRef.current
+    post(
+      portRef.current,
+      pos ? { t: 'laser', ...pos, color: laserColor, size: LASER_SIZES[laserSize] ?? LASER_SIZES[1] } : { t: 'laser-off' }
+    )
   }, [])
+
+  // Fare tekerleği: aşağı → ileri, yukarı → geri. Bir tık bir adım; hızlı çevirmede ya da dokunmatik
+  // yüzeyin küçük adımlarında art arda slayt atlamasın diye biriktirip kısa aralıkla tetiklenir.
+  const wheelRef = useRef({ acc: 0, lastEvent: 0, lastFire: 0 })
+  const onWheel = (e: React.WheelEvent): void => {
+    if (!(settings?.wheelNavigation ?? true) || e.ctrlKey || modalOpen) return
+    if ((e.target as HTMLElement).closest('.notes, .menu')) return // notlar kendi içinde kayar
+    const w = wheelRef.current
+    const now = performance.now()
+    if (now - w.lastEvent > 400) w.acc = 0
+    w.lastEvent = now
+    w.acc += e.deltaMode === 1 ? e.deltaY * 40 : e.deltaY
+    if (Math.abs(w.acc) < 50 || now - w.lastFire < 250) return
+    const dir = w.acc > 0 ? 'next' : 'prev'
+    w.acc = 0
+    w.lastFire = now
+    handlers[dir]?.()
+  }
 
   const selectTool = useCallback(
     (t: Tool) => {
@@ -216,12 +273,26 @@ export default function Presenter({ presentation: p, onClose, onSettings, inputB
   const setPrefs = useCallback((patch: Partial<InkPrefs>) => updateSettings({ ink: { ...prefs, ...patch } }), [prefs])
 
   const nextColor = (): void => {
+    if (tool === 'laser') {
+      const next = LASER_COLORS[(LASER_COLORS.indexOf(prefs.laserColor) + 1) % LASER_COLORS.length]
+      setPrefs({ laserColor: next })
+      showToast(`Lazer rengi: ${COLOR_NAMES[next] ?? next}`)
+      return
+    }
     const hl = tool === 'highlighter'
     const list = hl ? HL_COLORS : PEN_COLORS
     const next = list[(list.indexOf(hl ? prefs.hlColor : prefs.penColor) + 1) % list.length]
     setPrefs(hl ? { hlColor: next } : { penColor: next })
     showToast(`${hl ? 'Vurgulayıcı' : 'Kalem'} rengi: ${COLOR_NAMES[next] ?? next}`)
   }
+
+  const zoomBy = (factor: number): void => {
+    const v = zoom.get()
+    const next = zoomAt(v, v.s * factor, 0.5, 0.5)
+    if (next.s < SNAP_ZOOM) zoom.reset()
+    else zoom.set(next)
+  }
+  const modalOpen = gridOpen || confirmEnd || confirmClearAll || inputBlocked
 
   const handlers: ActionHandlers = gridOpen
     ? { escape: () => setGridOpen(false), grid: () => setGridOpen(false) }
@@ -233,6 +304,9 @@ export default function Presenter({ presentation: p, onClose, onSettings, inputB
         first: () => goto(firstVisible(p)),
         last: () => goto(lastVisible(p)),
         grid: () => setGridOpen(true),
+        zoomIn: () => zoomBy(1.25),
+        zoomOut: () => zoomBy(1 / 1.25),
+        zoomReset: () => zoom.reset(),
         toolLaser: () => selectTool('laser'),
         toolHighlighter: () => selectTool('highlighter'),
         toolPen: () => selectTool('pen'),
@@ -252,6 +326,7 @@ export default function Presenter({ presentation: p, onClose, onSettings, inputB
         escape: () => {
           if (breakUntil) endBreak()
           else if (tool !== 'none') selectTool('none')
+          else if (isZoomed(zoom.get())) zoom.reset()
           else if (running) setConfirmEnd(true)
         }
       }
@@ -260,7 +335,7 @@ export default function Presenter({ presentation: p, onClose, onSettings, inputB
   const remainingClicks = running ? Math.max(0, (state.clickCount ?? 0) - (state.click ?? 0)) : 0
 
   return (
-    <div className="presenter">
+    <div className="presenter" onWheel={onWheel}>
       <header className="presenter__bar">
         {!running && (
           <button className="btn" onClick={onClose} title="Sunuyu kapat">
@@ -304,6 +379,15 @@ export default function Presenter({ presentation: p, onClose, onSettings, inputB
           >
             {breakUntil ? 'Derse dön' : 'Ara'}
             {hint('break') && <kbd>{hint('break')}</kbd>}
+          </button>
+        )}
+        {zoomPct > 100 && (
+          <button
+            className="chip chip--btn chip--zoom"
+            onClick={() => zoom.reset()}
+            title={`Tüm slayta dön${hint('zoomReset') ? ` · Kısayol: ${hint('zoomReset')}` : ''}`}
+          >
+            Yakınlaştırma %{zoomPct} ✕
           </button>
         )}
         <Clock />
@@ -409,6 +493,7 @@ export default function Presenter({ presentation: p, onClose, onSettings, inputB
           state={state}
           slide={slide}
           tool={tool}
+          zoom={zoom}
           ink={ink}
           inkPrefs={prefs}
           hideInk={running && (state.state === ShowScreen.Black || state.state === ShowScreen.White)}

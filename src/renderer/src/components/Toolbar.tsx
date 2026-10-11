@@ -1,7 +1,7 @@
 import React from 'react'
 import type { ActionId } from '@shared/shortcuts'
 import type { InkPrefs } from '@shared/types'
-import { COLOR_NAMES, HL_COLORS, HL_SIZES, PEN_COLORS, PEN_SIZES, type Tool } from '../lib/tools'
+import { COLOR_NAMES, HL_COLORS, HL_SIZES, LASER_COLORS, LASER_SIZES, PEN_COLORS, PEN_SIZES, type Tool } from '../lib/tools'
 import { useKeyHint } from '../lib/use-shortcuts'
 
 type Props = {
@@ -19,6 +19,7 @@ type Props = {
 }
 
 const SIZE_NAMES = ['İnce', 'Orta', 'Kalın']
+const LASER_SIZE_NAMES = ['Küçük', 'Orta', 'Büyük']
 
 /** Alt araç çubuğu: gezinme, işaretleme araçları, renk/kalınlık, geri al, ekran. Dokunmatik dostu. */
 export default function Toolbar(p: Props): React.JSX.Element {
@@ -44,12 +45,21 @@ export default function Toolbar(p: Props): React.JSX.Element {
     )
   }
 
-  const drawing = p.tool === 'pen' || p.tool === 'highlighter'
-  const pen = p.tool === 'pen'
-  const colors = pen ? PEN_COLORS : HL_COLORS
-  const sizes = pen ? PEN_SIZES : HL_SIZES
-  const color = pen ? p.prefs.penColor : p.prefs.hlColor
-  const size = pen ? p.prefs.penSize : p.prefs.hlSize
+  // Renk/kalınlık paleti: kalem, vurgulayıcı ve lazer için (her aracın son seçimi ayrı tutulur)
+  const tool = p.tool
+  const palette =
+    tool === 'pen'
+      ? { colors: PEN_COLORS, sizes: PEN_SIZES, color: p.prefs.penColor, size: p.prefs.penSize, kind: 'dot' }
+      : tool === 'highlighter'
+        ? { colors: HL_COLORS, sizes: HL_SIZES, color: p.prefs.hlColor, size: p.prefs.hlSize, kind: 'bar' }
+        : tool === 'laser'
+          ? { colors: LASER_COLORS, sizes: LASER_SIZES, color: p.prefs.laserColor, size: p.prefs.laserSize, kind: 'glow' }
+          : null
+  const setColor = (c: string): void =>
+    p.onPrefs(tool === 'pen' ? { penColor: c } : tool === 'highlighter' ? { hlColor: c } : { laserColor: c })
+  const setSize = (i: number): void =>
+    p.onPrefs(tool === 'pen' ? { penSize: i } : tool === 'highlighter' ? { hlSize: i } : { laserSize: i })
+  const sizePx = (i: number): number => (palette?.kind === 'bar' ? 6 + i * 5 : palette?.kind === 'glow' ? 6 + i * 5 : 4 + i * 4)
 
   return (
     <footer className="toolbar">
@@ -60,28 +70,28 @@ export default function Toolbar(p: Props): React.JSX.Element {
       {btn('Vurgu', 'toolHighlighter', { active: p.tool === 'highlighter', title: 'Vurgulayıcı' })}
       {btn('Kalem', 'toolPen', { active: p.tool === 'pen' })}
       {btn('Silgi', 'toolEraser', { active: p.tool === 'eraser', title: 'Dokunduğu çizgiyi siler' })}
-      {drawing && (
+      {palette && (
         <div className="palette">
-          {colors.map((c) => (
+          {palette.colors.map((c) => (
             <button
               key={c}
-              className={`swatch ${c === color ? 'swatch--active' : ''}`}
+              className={`swatch ${c === palette.color ? 'swatch--active' : ''}`}
               style={{ ['--swatch' as string]: c }}
               title={COLOR_NAMES[c] ?? c}
-              onClick={() => p.onPrefs(pen ? { penColor: c } : { hlColor: c })}
+              onClick={() => setColor(c)}
             />
           ))}
           <div className="palette__sep" />
-          {sizes.map((_, i) => (
+          {palette.sizes.map((_, i) => (
             <button
               key={i}
-              className={`size-btn ${i === size ? 'size-btn--active' : ''}`}
-              title={SIZE_NAMES[i]}
-              onClick={() => p.onPrefs(pen ? { penSize: i } : { hlSize: i })}
+              className={`size-btn ${i === palette.size ? 'size-btn--active' : ''}`}
+              title={tool === 'laser' ? LASER_SIZE_NAMES[i] : SIZE_NAMES[i]}
+              onClick={() => setSize(i)}
             >
               <span
-                className={pen ? 'size-btn__dot' : 'size-btn__bar'}
-                style={{ ['--s' as string]: `${pen ? 4 + i * 4 : 6 + i * 5}px`, ['--swatch' as string]: color }}
+                className={`size-btn__${palette.kind}`}
+                style={{ ['--s' as string]: `${sizePx(i)}px`, ['--swatch' as string]: palette.color }}
               />
             </button>
           ))}

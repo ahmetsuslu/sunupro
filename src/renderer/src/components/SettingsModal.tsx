@@ -113,6 +113,18 @@ function General(): React.JSX.Element {
       </label>
       <label className="setting">
         <div>
+          <strong>Fare tekerleğiyle slayt değiştir</strong>
+          <span>Tekerlek aşağı: sonraki adım/slayt, yukarı: önceki. Ctrl+tekerlek her zaman yakınlaştırır.</span>
+        </div>
+        <input
+          type="checkbox"
+          className="toggle"
+          checked={s.wheelNavigation}
+          onChange={(e) => updateSettings({ wheelNavigation: e.target.checked })}
+        />
+      </label>
+      <label className="setting">
+        <div>
           <strong>Not yazı boyutu</strong>
           <span>Sunucu ekranındaki konuşmacı notları (sunum sırasında A− / A+ ile de değişir).</span>
         </div>
