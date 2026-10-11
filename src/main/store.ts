@@ -12,6 +12,7 @@ const DEFAULTS: Settings = {
   breakMinutes: 10,
   rememberInk: false,
   wheelNavigation: true,
+  lockOnBreak: true,
   autoUpdate: true
 }
 

@@ -1,5 +1,14 @@
 import React, { useCallback, useEffect, useReducer, useRef, useState } from 'react'
-import { ShowScreen, type InkPrefs, type OverlayMsg, type PresentationInfo, type ShowMode, type ShowState } from '@shared/types'
+import {
+  ShowScreen,
+  type InkPrefs,
+  type LockState,
+  type OverlayMsg,
+  type PresentationInfo,
+  type ShowMode,
+  type ShowState
+} from '@shared/types'
+import LockScreen from '../components/LockScreen'
 import Stage from '../components/Stage'
 import Toolbar from '../components/Toolbar'
 import SidePanel from '../components/SidePanel'
@@ -43,6 +52,11 @@ export default function Presenter({ presentation: p, onClose, onSettings, inputB
   const [state, setState] = useState<ShowState>({ running: false })
   const [previewSlide, setPreviewSlide] = useState(() => (resumable ? session!.slide : firstVisible(p)))
   const [breakUntil, setBreakUntil] = useState<number | null>(null)
+  const [lockState, setLockState] = useState<LockState>({ locked: false, hello: null, windowsLocked: false })
+  useEffect(() => {
+    window.api.lock.get().then(setLockState)
+    return window.api.lock.onState(setLockState)
+  }, [])
   const breakRef = useRef<number | null>(null)
   breakRef.current = breakUntil
   const [tool, setTool] = useState<Tool>('none')
@@ -243,6 +257,8 @@ export default function Presenter({ presentation: p, onClose, onSettings, inputB
     if (!running) return
     sendBreak(Date.now() + (settings?.breakMinutes ?? 10) * 60_000)
     timer.pause()
+    // Sınıfta açık bırakılmasın: kilit (parmak izi / PIN ile açılır), projeksiyonda geri sayım sürer
+    if (settings?.lockOnBreak ?? true) window.api.lock.start().then(setLockState)
   }
   const endBreak = (): void => {
     sendBreak(null)
@@ -292,7 +308,7 @@ export default function Presenter({ presentation: p, onClose, onSettings, inputB
     if (next.s < SNAP_ZOOM) zoom.reset()
     else zoom.set(next)
   }
-  const modalOpen = gridOpen || confirmEnd || confirmClearAll || inputBlocked
+  const modalOpen = gridOpen || confirmEnd || confirmClearAll || inputBlocked || lockState.locked
 
   const handlers: ActionHandlers = gridOpen
     ? { escape: () => setGridOpen(false), grid: () => setGridOpen(false) }
@@ -330,7 +346,7 @@ export default function Presenter({ presentation: p, onClose, onSettings, inputB
           else if (running) setConfirmEnd(true)
         }
       }
-  useShortcuts(handlers, !confirmEnd && !confirmClearAll && !inputBlocked)
+  useShortcuts(handlers, !confirmEnd && !confirmClearAll && !inputBlocked && !lockState.locked)
 
   const remainingClicks = running ? Math.max(0, (state.clickCount ?? 0) - (state.click ?? 0)) : 0
 
@@ -449,6 +465,9 @@ export default function Presenter({ presentation: p, onClose, onSettings, inputB
             {new Date(breakUntil).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}
           </span>
           <div className="spacer" />
+          <button className="btn" onClick={() => window.api.lock.start().then(setLockState)} title="Parmak izi / PIN ile açılır">
+            Kilitle
+          </button>
           <button className="btn" onClick={() => extendBreak(-5)}>
             −5 dk
           </button>
@@ -530,6 +549,7 @@ export default function Presenter({ presentation: p, onClose, onSettings, inputB
           }}
         />
       )}
+      {lockState.locked && <LockScreen state={lockState} breakUntil={breakUntil} />}
       {confirmClearAll && (
         <ConfirmDialog
           title="Tüm çizimler silinsin mi?"

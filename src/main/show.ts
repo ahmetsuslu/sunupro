@@ -1,4 +1,15 @@
-import { app, BrowserWindow, desktopCapturer, dialog, ipcMain, nativeImage, screen, session, type Display } from 'electron'
+import {
+  app,
+  BrowserWindow,
+  desktopCapturer,
+  dialog,
+  ipcMain,
+  nativeImage,
+  powerSaveBlocker,
+  screen,
+  session,
+  type Display
+} from 'electron'
 import { createHash } from 'crypto'
 import { closeSync, cpSync, existsSync, mkdirSync, mkdtempSync, openSync, readFileSync, readSync, rmSync, statSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
@@ -134,6 +145,7 @@ class ShowController {
   state: ShowState = { running: false }
   mirrorSource: 'window' | 'screen' | null = null
   private pollTimer: NodeJS.Timeout | null = null
+  private sleepBlocker: number | null = null
   /** Görsel modda gösteri durumunu biz tutarız */
   private img = { slide: 1, screen: ShowScreen.Running as ShowScreen }
   /** Arka plan hazırlama kuyruğu, PowerPoint'i kullanmadan önce durdurulur / sunu kapanınca sürer */
@@ -354,6 +366,8 @@ class ShowController {
       st = this.imageState()
     }
     this.showOverlay()
+    // Gösteri (ve aralar) boyunca ekran kararmasın / bilgisayar uyumasın
+    if (this.sleepBlocker == null) this.sleepBlocker = powerSaveBlocker.start('prevent-display-sleep')
     // Klavye/tıklayıcı odağı sunucu penceresinde kalmalı
     main.focus()
     return this.setState(st, true)
@@ -456,6 +470,8 @@ class ShowController {
 
   private cleanupShow(): void {
     this.stopPolling()
+    if (this.sleepBlocker != null) powerSaveBlocker.stop(this.sleepBlocker)
+    this.sleepBlocker = null
     const overlay = this.overlay
     this.overlay = null
     if (overlay && !overlay.isDestroyed()) overlay.destroy()

@@ -1,10 +1,11 @@
-import { app, BrowserWindow, desktopCapturer, screen, type Display } from 'electron'
-import { execFileSync } from 'child_process'
+import { app, BrowserWindow, desktopCapturer, powerMonitor, screen, type Display } from 'electron'
+import { execFileSync, spawn } from 'child_process'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs'
 import { join } from 'path'
 import { ppt } from './pptctl'
 import { cacheRoot, friendlyError, show } from './show'
 import { physicalCenter } from './displays'
+import { breakLock } from './lock'
 import { loadSettings, saveSettings } from './store'
 
 /**
@@ -49,6 +50,8 @@ function runPs(outDir: string, name: string, code: string): string {
 
 export async function runSelfTest(main: BrowserWindow, outDir: string): Promise<void> {
   mkdirSync(outDir, { recursive: true })
+  // Ara kilidi testi gerçek Windows kilidini tetiklemesin (gözcü yalnızca bildirir)
+  process.env['SUNU_LOCK_DRYRUN'] = '1'
   const checks: { name: string; ok: boolean; detail?: unknown }[] = []
   const check = (name: string, ok: boolean, detail?: unknown): void => {
     checks.push({ name, ok, detail })
@@ -142,8 +145,14 @@ Start-Sleep -Milliseconds 150; [void][M]::SetCursorPos($old.X, $old.Y)`
     check('2. ekrana tıklama slaytı ilerletmedi', show.state.slide === before.slide && show.state.click === before.click, { before, after: show.state })
     check('2. ekrana tıklama PowerPoint gösterisini öne getirmedi', fg.foreground !== show.state.hwnd, { fg: fg.foreground, mainHwnd, showHwnd: show.state.hwnd })
 
-    press(main, '1')
-    await sleep(300)
+    // Lazer seçildiğini araç çubuğundan doğrula (gerçek fare imleci kıpırdarsa tuş olayı gecikebilir)
+    const laserActive = (): Promise<boolean> =>
+      js(`[...document.querySelectorAll('.toolbar .btn--active')].some((b) => b.textContent.includes('Lazer'))`)
+    for (let i = 0; i < 3 && !(await laserActive()); i++) {
+      main.focus()
+      press(main, '1')
+      await sleep(300)
+    }
     // Sahne üzerinde ~60 Hz gerçek fare hareketi (yay): Stage → MessagePort → katman yolunun tamamı.
     // İz boncuksuz, tek parça ve kuyruğa doğru solan olmalı.
     const st = (await main.webContents.executeJavaScript(
@@ -488,7 +497,33 @@ Start-Sleep -Milliseconds 150; [void][M]::SetCursorPos($old.X, $old.Y)`
     press(main, 'A')
     await sleep(800)
     check('A → ara modu (sunucuda şerit)', await js<boolean>(`!!document.querySelector('.banner--break')`))
+
+    // Ara kilidi (kuru çalıştırma: gerçek Windows kilidi yerine yalnızca bildirir)
+    check('arada kilit ekranı açıldı (tam ekran, en üstte)', (await js<boolean>(`!!document.querySelector('.lock-screen')`)) && main.isKiosk())
+    await waitFor(() => breakLock.get().hello !== null, 10_000)
+    check('Windows Hello (parmak izi) hazır', breakLock.get().hello === 'Available', breakLock.get())
+    await sleep(600)
     await shot('h2-ara-seyirci', 'audience')
+    await shot('h2-kilit-sunucu', 'presenter')
+    // Kilidi aşma denemesi: başka bir pencere öne gelir → gözcü Windows kilidini devreye sokmalı
+    spawn(
+      'powershell.exe',
+      [
+        '-NoProfile',
+        '-Command',
+        "Add-Type -AssemblyName System.Windows.Forms; $f = New-Object Windows.Forms.Form; $f.Text = 'deneme'; $t = New-Object Windows.Forms.Timer; $t.Interval = 3000; $t.Add_Tick({ $f.Close() }); $t.Start(); $f.Add_Shown({ $f.Activate() }); [void]$f.ShowDialog()"
+      ],
+      { windowsHide: false }
+    )
+    await waitFor(() => breakLock.get().windowsLocked, 8000)
+    check('kilit aşılmaya çalışılınca Windows kilidi devreye girer', breakLock.get().windowsLocked, breakLock.get())
+    await sleep(3500) // deneme penceresi kapansın
+    powerMonitor.emit('unlock-screen') // kullanıcı Windows kilidini parmak iziyle açtı
+    await waitFor(() => !breakLock.get().locked, 3000)
+    await sleep(500)
+    check('Windows kilidi açılınca Sunu Pro kilidi de açılır', !breakLock.get().locked && !main.isKiosk() && !(await js<boolean>(`!!document.querySelector('.lock-screen')`)))
+
+    main.focus()
     press(main, 'A')
     await sleep(400)
     check('A tekrar → derse dönüş', !(await js<boolean>(`!!document.querySelector('.banner--break')`)))

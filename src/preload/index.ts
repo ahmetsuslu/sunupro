@@ -4,6 +4,7 @@ import type {
   DisplayInfo,
   InkMap,
   LibraryView,
+  LockState,
   PresentationInfo,
   Result,
   Settings,
@@ -50,6 +51,13 @@ const api = {
     retry: (path: string): Promise<LibraryView> => ipcRenderer.invoke('library:retry', path),
     forgetRecent: (path: string): Promise<LibraryView> => ipcRenderer.invoke('library:forget-recent', path),
     onChange: (cb: (view: LibraryView) => void): (() => void) => sub('library:changed', cb)
+  },
+  // Ara kilidi (Windows Hello ile açılır)
+  lock: {
+    start: (): Promise<LockState> => ipcRenderer.invoke('lock:start'),
+    verify: (): Promise<string> => ipcRenderer.invoke('lock:verify'),
+    get: (): Promise<LockState> => ipcRenderer.invoke('lock:get'),
+    onState: (cb: (s: LockState) => void): (() => void) => sub('lock:state', cb)
   },
   ink: {
     load: (path: string): Promise<InkMap | null> => ipcRenderer.invoke('ink:load', path),

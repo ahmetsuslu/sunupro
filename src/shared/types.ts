@@ -187,7 +187,18 @@ export type Settings = {
   rememberInk: boolean
   /** Fare tekerleği: aşağı → sonraki, yukarı → önceki */
   wheelNavigation: boolean
+  /** Ara başlayınca bilgisayarı kilitle (parmak izi / PIN ile açılır, projeksiyonda geri sayım sürer) */
+  lockOnBreak: boolean
   autoUpdate: boolean
+}
+
+/** Ara kilidi durumu */
+export type LockState = {
+  locked: boolean
+  /** Windows Hello kullanılabilirliği (UserConsentVerifierAvailability); null → henüz bilinmiyor */
+  hello: string | null
+  /** Kilit aşılmaya çalışıldı ya da parmak izi yok → gerçek Windows kilidi devrede */
+  windowsLocked: boolean
 }
 
 /** IPC sonucu: hatalar kullanıcıya gösterilecek Türkçe mesajla döner */
