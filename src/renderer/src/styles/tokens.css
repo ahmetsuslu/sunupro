@@ -1,0 +1,82 @@
+/* Tema token'ları. Sunucu ekranı loş ortamda (derslik) kullanıldığı için koyu varsayılandır. */
+:root {
+  --radius: 10px;
+  --radius-sm: 6px;
+  --font-ui: "Segoe UI Variable", "Segoe UI", -apple-system, Roboto, Helvetica, Arial, sans-serif;
+  --font-mono: "Cascadia Code", "Consolas", monospace;
+  --transition: 120ms ease;
+
+  --bg-app: #16181d;
+  --bg-panel: #1f2229;
+  --bg-elevated: #272b34;
+  --bg-hover: rgba(255, 255, 255, 0.07);
+  --bg-active: rgba(255, 255, 255, 0.13);
+  --bg-stage: #000000;
+
+  --text-primary: #e8eaed;
+  --text-secondary: #a4a9b3;
+  --text-muted: #6f7582;
+
+  --border: #2e323b;
+  --border-strong: #3c414c;
+
+  --accent: #4f8cff;
+  --accent-hover: #6a9dff;
+  --accent-contrast: #ffffff;
+  --danger: #ef5350;
+  --warn: #f0b429;
+  --laser: #ff2a2a;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  font-family: var(--font-ui);
+  color: var(--text-primary);
+  background: var(--bg-app);
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+}
+
+/* Seyirci ekranı: canlı modda tamamen şeffaf katman, görsel modda siyah zemin; imleç gizli */
+html.overlay-root,
+html.overlay-root body,
+html.overlay-root #root {
+  background: transparent;
+  cursor: none;
+}
+html.audience-root,
+html.audience-root body,
+html.audience-root #root {
+  background: #000;
+  cursor: none;
+}
+html.audience-windowed,
+html.audience-windowed body {
+  cursor: default;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 6px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}

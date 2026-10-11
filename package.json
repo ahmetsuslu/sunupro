@@ -1,0 +1,41 @@
+{
+  "name": "sunupro",
+  "productName": "Sunu Pro",
+  "version": "0.1.0",
+  "description": "Sunu Pro — derslere göre düzenlenen, kaldığı yeri hatırlayan, dokunmatik işaretçili çift ekran PowerPoint sunum aracı",
+  "main": "./out/main/index.js",
+  "author": "Ahmet Süslü",
+  "license": "MIT",
+  "homepage": "https://github.com/ahmetsuslu/sunupro",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ahmetsuslu/sunupro.git"
+  },
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "preview": "electron-vite preview",
+    "typecheck:node": "tsc --noEmit -p tsconfig.node.json --composite false",
+    "typecheck:web": "tsc --noEmit -p tsconfig.web.json --composite false",
+    "typecheck": "npm run typecheck:node && npm run typecheck:web",
+    "build:win": "electron-vite build && electron-builder --win",
+    "release": "bash scripts/publish-release.sh"
+  },
+  "devDependencies": {
+    "@types/node": "^26.2.0",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.4",
+    "@vitejs/plugin-react": "^6.0.5",
+    "electron": "^43.3.0",
+    "electron-builder": "^26.15.3",
+    "electron-vite": "^5.0.0",
+    "typescript": "^7.0.2",
+    "vite": "^8.2.1"
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.9",
+    "perfect-freehand": "^1.2.3",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8"
+  }
+}

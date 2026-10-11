@@ -1,0 +1,51 @@
+appId: com.sslah.sunupro
+productName: Sunu Pro
+copyright: Copyright © 2026 Ahmet Süslü
+
+# Native bağımlılık yok (PowerPoint'e PowerShell üzerinden erişilir) — rebuild adımını atla
+npmRebuild: false
+
+directories:
+  buildResources: build
+  output: release
+
+# Otomatik güncelleme kaynağı (electron-updater)
+publish:
+  provider: github
+  owner: ahmetsuslu
+  repo: sunupro
+
+files:
+  - out/**/*
+  - package.json
+
+# PowerShell betikleri asar dışında, gerçek dosya olarak dağıtılır (powershell.exe -File ile çalışır)
+extraResources:
+  - from: resources/
+    to: resources/
+    filter:
+      - "**/*.ps1"
+
+# Uygulama yalnızca Windows hedefliyor (PowerPoint COM)
+win:
+  icon: build/icon.png
+  target:
+    - target: nsis
+      arch:
+        - x64
+    - target: portable
+      arch:
+        - x64
+
+nsis:
+  # Tek tık kurulum: güncellemeler kurulum sihirbazı açmadan sessizce uygulanır
+  oneClick: true
+  perMachine: false
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: Sunu Pro
+  # Boşluksuz ad: GitHub asset adı ile latest.yml birebir eşleşir
+  artifactName: SunuPro-Setup-${version}.${ext}
+
+portable:
+  artifactName: SunuPro-${version}-portable.${ext}
