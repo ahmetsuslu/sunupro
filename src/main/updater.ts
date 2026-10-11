@@ -12,6 +12,7 @@ const { autoUpdater } = electronUpdater
 export function registerUpdater(getWindow: () => BrowserWindow | null): void {
   autoUpdater.autoDownload = true
   autoUpdater.autoInstallOnAppQuit = true
+  autoUpdater.disableWebInstaller = true // yalnızca tam NSIS kurulum dosyası yayınlanıyor
   autoUpdater.logger = {
     info: (m: unknown) => log('[updater]', m),
     warn: (m: unknown) => log('[updater:warn]', m),
