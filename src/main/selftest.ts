@@ -152,6 +152,36 @@ Start-Sleep -Milliseconds 150; [void][M]::SetCursorPos($old.X, $old.Y)`
     check('2. ekrana tıklama slaytı ilerletmedi', show.state.slide === before.slide && show.state.click === before.click, { before, after: show.state })
     check('2. ekrana tıklama PowerPoint gösterisini öne getirmedi', fg.foreground !== show.state.hwnd, { fg: fg.foreground, mainHwnd, showHwnd: show.state.hwnd })
 
+    // Fare imleci: araç seçili değilken sunucudaki fare seyirci ekranında ok olarak görünür (ucu aynı noktada)
+    {
+      const r0 = (await js(
+        `(() => { const r = document.querySelector('.stage').getBoundingClientRect(); return { x: r.x, y: r.y, w: r.width, h: r.height } })()`
+      )) as { x: number; y: number; w: number; h: number }
+      const pointerState = (): Promise<{ opacity: number; tipX: number; tipY: number; expX: number; expY: number }> =>
+        show.overlay!.webContents.executeJavaScript(`(() => {
+          const el = document.querySelector('.overlay-pointer'), b = el.getBoundingClientRect(), u = b.height / 22
+          const a = ${(show.presentation?.widthPt ?? 16) / (show.presentation?.heightPt ?? 9)}, W = innerWidth, H = innerHeight
+          const sw = Math.min(W, H * a), sh = sw / a, sx = (W - sw) / 2, sy = (H - sh) / 2
+          return { opacity: Number(getComputedStyle(el).opacity), tipX: b.x + u, tipY: b.y + u, expX: sx + 0.4 * sw, expY: sy + 0.5 * sh }
+        })()`)
+      for (let i = 0; i <= 6; i++) {
+        main.webContents.sendInputEvent({ type: 'mouseMove', x: Math.round(r0.x + (0.3 + (0.1 * i) / 6) * r0.w), y: Math.round(r0.y + 0.5 * r0.h) })
+        await sleep(20)
+      }
+      await sleep(350)
+      const ptr = await pointerState()
+      await shot('a1b-fare-oku', 'audience')
+      check(
+        'araç yokken fare seyirci ekranında ok olarak görünüyor',
+        ptr.opacity > 0.9 && Math.abs(ptr.tipX - ptr.expX) < 6 && Math.abs(ptr.tipY - ptr.expY) < 6,
+        ptr
+      )
+      main.focus()
+      press(main, '1')
+      await sleep(400)
+      check('lazer seçilince seyirci ekranındaki ok kayboluyor', (await pointerState()).opacity < 0.1)
+    }
+
     // Lazer seçildiğini araç çubuğundan doğrula (gerçek fare imleci kıpırdarsa tuş olayı gecikebilir)
     const laserActive = (): Promise<boolean> =>
       js(`[...document.querySelectorAll('.toolbar .btn--active')].some((b) => b.textContent.includes('Lazer'))`)

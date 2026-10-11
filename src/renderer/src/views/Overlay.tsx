@@ -108,6 +108,7 @@ export default function Overlay(): React.JSX.Element {
       )}
       <InkLayer aspect={aspect} slide={slide} hidden={blank} hub={hub} />
       <LaserLayer aspect={aspect} hidden={blank} hub={hub} />
+      <PointerLayer aspect={aspect} hidden={blank} hub={hub} />
       <BreakScreen />
     </div>
   )
@@ -285,6 +286,76 @@ function LaserLayer({ aspect, hidden, hub }: { aspect: number; hidden: boolean; 
   useEffect(() => rendererRef.current?.setAspect(aspect), [aspect])
 
   return <canvas ref={canvasRef} className="overlay-canvas" style={{ visibility: hidden ? 'hidden' : 'visible' }} />
+}
+
+/** Fare durunca ok bu süre sonra kaybolur (PowerPoint gibi) */
+const POINTER_IDLE_MS = 3000
+
+/**
+ * Sunucudaki fare imleci (araç seçili değilken): seyirci ekranında ok. Konum slayta göre gelir,
+ * yakınlaştırma görünümüne göre yerleşir; ok boyutu ekrana göre sabittir. React durumu kullanılmaz.
+ */
+function PointerLayer({ aspect, hidden, hub }: { aspect: number; hidden: boolean; hub: ViewHub }): React.JSX.Element {
+  const ref = useRef<HTMLDivElement>(null)
+  const aspectRef = useRef(aspect)
+  aspectRef.current = aspect
+
+  useEffect(() => {
+    const el = ref.current!
+    let pos: { x: number; y: number } | null = null
+    let view = hub.effective()
+    let idle: number | undefined
+    const place = (): void => {
+      if (!pos) {
+        el.style.opacity = '0'
+        return
+      }
+      const base = containRect(window.innerWidth, window.innerHeight, aspectRef.current)
+      const r = zoomRect(base, view)
+      const x = r.x + pos.x * r.width
+      const y = r.y + pos.y * r.height
+      // Slaytın dışına (yakınlaştırmada kırpılan bölge) taşmasın
+      const inside = x >= base.x && x <= base.x + base.width && y >= base.y && y <= base.y + base.height
+      // Okun ucu svg'de (1, 1) birimde (viewBox 22 birim yüksek): uç tam konuma gelsin
+      const h = Math.max(22, base.height * 0.034)
+      el.style.height = `${h}px`
+      el.style.transform = `translate(${x - h / 22}px, ${y - h / 22}px)`
+      el.style.opacity = inside ? '1' : '0'
+    }
+    const offMsg = onOverlayMessage((m) => {
+      if (m.t === 'pointer') {
+        pos = { x: m.x, y: m.y }
+        window.clearTimeout(idle)
+        idle = window.setTimeout(() => {
+          pos = null
+          place()
+        }, POINTER_IDLE_MS)
+      } else if (m.t === 'pointer-off') {
+        pos = null
+        window.clearTimeout(idle)
+      } else return
+      place()
+    })
+    const offView = hub.subscribe((v) => {
+      view = v
+      place()
+    })
+    window.addEventListener('resize', place)
+    return () => {
+      offMsg()
+      offView()
+      window.removeEventListener('resize', place)
+      window.clearTimeout(idle)
+    }
+  }, [hub])
+
+  return (
+    <div ref={ref} className="overlay-pointer" style={{ visibility: hidden ? 'hidden' : 'visible', opacity: 0 }}>
+      <svg viewBox="-1 -1 15 22" aria-hidden="true">
+        <path d="M0 0 L0 17 L4.4 12.8 L7.4 19.6 L10.3 18.4 L7.4 11.8 L13 11.8 Z" />
+      </svg>
+    </div>
+  )
 }
 
 /**

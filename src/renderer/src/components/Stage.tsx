@@ -24,6 +24,8 @@ type Props = {
   hideInk: boolean
   /** Lazer konumu (slayta göre) katmana gönderilir; React durumu kullanılmaz (gecikme yaratır) */
   onLaser: (pos: Point | null) => void
+  /** Araç seçili değilken fare konumu seyirci ekranına ok olarak gönderilir */
+  mirrorPointer: boolean
   /** Çizilmekte olan çizgiyi katmana anlık iletir */
   onOverlay: (msg: OverlayMsg) => void
   onSwipe: (dir: 'next' | 'prev') => void
@@ -49,7 +51,7 @@ type Gesture =
  * dönünce kaydırma kapanır ve parmakla slayt değiştirme yeniden çalışır.
  */
 export default function Stage(props: Props): React.JSX.Element {
-  const { presentation, state, slide, tool, ink, inkPrefs, zoom, hideInk, onLaser, onOverlay, onSwipe } = props
+  const { presentation, state, slide, tool, ink, inkPrefs, zoom, hideInk, onLaser, mirrorPointer, onOverlay, onSwipe } = props
   const aspect = presentation.widthPt / presentation.heightPt
   const areaRef = useRef<HTMLDivElement>(null)
   const stageRef = useRef<HTMLDivElement>(null)
@@ -208,10 +210,23 @@ export default function Stage(props: Props): React.JSX.Element {
     laserRef.current?.move(p, inkPrefs.laserColor, LASER_SIZES[inkPrefs.laserSize] ?? LASER_SIZES[1])
     onLaser(p)
   }
+  // ---------- Fare imleci (araç yokken seyirci ekranında ok) ----------
+  const pointerShownRef = useRef(false)
+  const pointer = (pos: { u: number; w: number } | null): void => {
+    if (pos) {
+      pointerShownRef.current = true
+      onOverlay({ t: 'pointer', ...toSlide(pos.u, pos.w, zoom.get()) })
+    } else if (pointerShownRef.current) {
+      pointerShownRef.current = false
+      onOverlay({ t: 'pointer-off' })
+    }
+  }
+
   useEffect(() => {
     if (tool !== 'laser') laser(null)
     if (tool !== 'eraser') ring(null)
-  }, [tool]) // laser/ring her çizimde yeniden oluşur; yalnızca araç değişince çalışsın
+    if (tool !== 'none' || !mirrorPointer) pointer(null)
+  }, [tool, mirrorPointer]) // laser/ring/pointer her çizimde yeniden oluşur; yalnızca araç değişince çalışsın
 
   // ---------- Silgi göstergesi ----------
   const ring = (e: { clientX: number; clientY: number } | null): void => {
@@ -391,6 +406,7 @@ export default function Stage(props: Props): React.JSX.Element {
     const t = toolFor(e)
     if (t === 'eraser') ring(e)
     else if (t === 'laser') laser(stagePos(e.clientX, e.clientY))
+    else if (t === 'none' && e.pointerType === 'mouse' && mirrorPointer) pointer(stagePos(e.clientX, e.clientY))
   }
 
   const finish = (e: React.PointerEvent, cancelled: boolean): void => {
@@ -443,6 +459,7 @@ export default function Stage(props: Props): React.JSX.Element {
         onPointerCancel={(e) => finish(e, true)}
         onPointerLeave={(e) => {
           if (tool === 'laser' && e.pointerType === 'mouse') laser(null)
+          if (e.pointerType === 'mouse') pointer(null)
           if (!erasingRef.current && e.pointerType === 'mouse') ring(null)
         }}
       >

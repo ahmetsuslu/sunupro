@@ -508,6 +508,7 @@ export default function Presenter({ presentation: p, onClose, onSettings, inputB
           inkPrefs={prefs}
           hideInk={running && (state.state === ShowScreen.Black || state.state === ShowScreen.White)}
           onLaser={sendLaser}
+          mirrorPointer={running && (settings?.mirrorPointer ?? true)}
           onOverlay={toOverlay}
           onSwipe={(dir) => handlers[dir]?.()}
         />

@@ -157,6 +157,9 @@ export type OverlayMsg =
   /** size: nokta yarıçapı, slayt yüksekliğine oranla */
   | { t: 'laser'; x: number; y: number; color: string; size: number }
   | { t: 'laser-off' }
+  /** Fare imleci (araç seçili değilken): seyirci ekranında ok olarak gösterilir */
+  | { t: 'pointer'; x: number; y: number }
+  | { t: 'pointer-off' }
   /** Tüm çizimler (bağlantı kurulunca / tümü silinince) */
   | { t: 'ink-all'; ink: InkMap }
   /** Bir slaytın çizimleri değişti; listedeki kimlikler canlı çizgilerden düşülür */
@@ -212,6 +215,8 @@ export type Settings = {
   rememberInk: boolean
   /** Fare tekerleği: aşağı → sonraki, yukarı → önceki */
   wheelNavigation: boolean
+  /** Araç seçili değilken sunucudaki fare imleci seyirci ekranında ok olarak görünür */
+  mirrorPointer: boolean
   autoUpdate: boolean
 }
 

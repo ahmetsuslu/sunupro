@@ -12,6 +12,7 @@ const DEFAULTS: Settings = {
   breakMinutes: 10,
   rememberInk: false,
   wheelNavigation: true,
+  mirrorPointer: true,
   autoUpdate: true
 }
 

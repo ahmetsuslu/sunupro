@@ -38,6 +38,8 @@ PowerPoint'in sunucu görünümünde ders anlatırken eksik kalan noktalar için
 - **İşaretleme:** iz bırakan lazer (renk ve boyut seçilebilir; iz sunucu ekranında da görünür), yarı saydam vurgulayıcı, basınca
   duyarlı kalem, silgi; renk ve kalınlık seçimi; slayt başına geri al/yinele; çizimler slayta bağlıdır
   (slayt değişince saklanır, dönünce geri gelir); istenirse dosya bazında kalıcı.
+- **Fare imleci:** araç seçili değilken slayt üzerindeki fare seyirci ekranında ok olarak görünür, fare durunca
+  kaybolur (Ayarlar'dan kapatılabilir).
 - **Yakınlaştırma:** iki parmakla büyüt/küçült ve kaydır (ya da Ctrl+tekerlek, `+` / `-`); projeksiyona
   aynen yansır, animasyon durumu korunur, çizimler net kalır. Tam boyuta dönünce parmakla slayt
   değiştirme yeniden çalışır.
@@ -128,7 +130,7 @@ Electron + electron-vite + React + TypeScript. PowerPoint'e, Windows'ta hazır g
 npm install
 npm run dev          # geliştirme
 npm run typecheck    # tip denetimi
-npm run test:e2e     # uçtan uca test (PowerPoint + mümkünse iki ekran gerekir)
+npm run test:e2e     # uçtan uca test (PowerPoint + mümkünse iki ekran; Sunu Pro ve PowerPoint kapalıyken)
 npm run build:win    # kurulum dosyası ve taşınabilir sürüm → release/
 npm run release      # GitHub Releases'e yayın (gh CLI)
 ```

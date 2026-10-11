@@ -709,3 +709,22 @@ kbd {
   height: 100vh;
   pointer-events: none;
 }
+/* Sunucudaki fare imlecinin seyirci ekranındaki oku: ucu konumda, kenarlı beyaz ok */
+.overlay-pointer {
+  position: fixed;
+  left: 0;
+  top: 0;
+  height: 32px;
+  pointer-events: none;
+  transition: opacity 200ms ease;
+  will-change: transform;
+}
+.overlay-pointer svg {
+  height: 100%;
+  overflow: visible;
+  fill: #fff;
+  stroke: #000;
+  stroke-width: 1.2;
+  stroke-linejoin: round;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.5));
+}

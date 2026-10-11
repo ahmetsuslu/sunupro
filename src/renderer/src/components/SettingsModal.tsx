@@ -125,6 +125,18 @@ function General(): React.JSX.Element {
       </label>
       <label className="setting">
         <div>
+          <strong>Fare imlecini seyirci ekranında göster</strong>
+          <span>Araç (lazer, vurgulayıcı, kalem) seçili değilken slayt üzerindeki fare seyirci ekranında ok olarak görünür.</span>
+        </div>
+        <input
+          type="checkbox"
+          className="toggle"
+          checked={s.mirrorPointer}
+          onChange={(e) => updateSettings({ mirrorPointer: e.target.checked })}
+        />
+      </label>
+      <label className="setting">
+        <div>
           <strong>Not yazı boyutu</strong>
           <span>Sunucu ekranındaki konuşmacı notları (sunum sırasında A− / A+ ile de değişir).</span>
         </div>
