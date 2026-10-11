@@ -539,6 +539,40 @@ Start-Sleep -Milliseconds 150; [void][M]::SetCursorPos($old.X, $old.Y)`
     const ui2 = await presentedUi()
     check('✓ → işaret kalktı, sıradaki Hafta 2', ui2.count === '2 / 4 sunuldu' && ui2.next === 'Hafta 2', ui2)
 
+    // Sürükleyerek sıralama: tutamaçtan fareyle en üste, parmakla en alta; sunu açılmamalı
+    type Box = { x: number; y: number; top: number; bottom: number }
+    const rowBoxes = (): Promise<{ name: string; handle: Box; row: Box }[]> =>
+      js(`[...document.querySelectorAll('.file-list .file-row')].map((r) => {
+        const b = (el) => { const x = el.getBoundingClientRect(); return { x: x.x + x.width / 2, y: x.y + x.height / 2, top: x.top, bottom: x.bottom } }
+        return { name: r.querySelector('.file-row__name').textContent, handle: b(r.querySelector('.drag-handle')), row: b(r) }
+      })`)
+    const order = async (): Promise<string> =>
+      (await js<View>(`window.api.library.get()`)).courses[0].items.map((i) => i.name.replace('.pptx', '')).join('|')
+    const glide = async (move: (y: number) => Promise<unknown>, y0: number, y1: number): Promise<void> => {
+      for (let k = 1; k <= 12; k++) {
+        await move(y0 + ((y1 - y0) * k) / 12)
+        await sleep(25)
+      }
+    }
+    let rb = await rowBoxes()
+    const h10 = rb.find((r) => r.name === 'Hafta 10')!
+    const mouse = (type: string, x: number, y: number): Promise<unknown> =>
+      cdp('Input.dispatchMouseEvent', { type, x, y, button: 'left', buttons: type === 'mouseReleased' ? 0 : 1, clickCount: 1 })
+    await mouse('mousePressed', h10.handle.x, h10.handle.y)
+    await glide((y) => mouse('mouseMoved', h10.handle.x, y), h10.handle.y, rb[0].row.top + 8)
+    await sleep(150)
+    await shot('h0c-surukle', 'presenter')
+    await mouse('mouseReleased', h10.handle.x, rb[0].row.top + 8)
+    await sleep(500)
+    check('fareyle sürükle → Hafta 10 en üstte, sunu açılmadı', (await order()) === 'Hafta 10|ornek-sunu|Hafta 1|Hafta 2' && !show.presentation, await order())
+    rb = await rowBoxes()
+    const top = rb[0]
+    await touch('touchStart', [{ x: top.handle.x, y: top.handle.y }])
+    await glide((y) => touch('touchMove', [{ x: top.handle.x, y }]), top.handle.y, rb[rb.length - 1].row.bottom - 8)
+    await touch('touchEnd', [])
+    await sleep(500)
+    check('parmakla sürükle → Hafta 10 yeniden en altta', (await order()) === 'ornek-sunu|Hafta 1|Hafta 2|Hafta 10' && !show.presentation, await order())
+
     await js(`[...document.querySelectorAll('.file-row')].find((r) => r.textContent.includes('ornek-sunu')).click()`)
     await waitFor(() => show.presentation?.name === 'ornek-sunu.pptx', 15000)
     await sleep(800)

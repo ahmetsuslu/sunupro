@@ -3,6 +3,7 @@ import type { LibraryCourse, LibraryFile, LibraryView } from '@shared/types'
 import CourseDialog from '../components/CourseDialog'
 import ConfirmDialog from '../components/ConfirmDialog'
 import { timeAgo } from '../lib/time'
+import { useDragReorder } from '../lib/use-drag-reorder'
 import UpdateBanner from '../components/UpdateBanner'
 
 type Props = {
@@ -68,6 +69,24 @@ export default function Library({ onOpen, onSettings, error, onDismissError }: P
   const nextPath = course?.items.find((f) => !f.presentedAt && f.status !== 'missing')?.path ?? null
   const doneCount = course?.items.filter((f) => f.presentedAt).length ?? 0
 
+  // Tutamaçtan sürükleyerek sıralama: yeni sıra hemen gösterilir, kayıt ardından gelir
+  const reorder = useDragReorder(course?.items.length ?? 0, (from, to) => {
+    if (!course) return
+    const path = course.items[from].path
+    setView((v) =>
+      v && {
+        ...v,
+        courses: v.courses.map((c) => {
+          if (c.id !== course.id) return c
+          const items = [...c.items]
+          items.splice(to, 0, ...items.splice(from, 1))
+          return { ...c, items }
+        })
+      }
+    )
+    window.api.library.moveFile(course.id, path, to - from).then(setView)
+  })
+
   return (
     <div
       className={`library ${dragging ? 'library--drag' : ''}`}
@@ -109,7 +128,7 @@ export default function Library({ onOpen, onSettings, error, onDismissError }: P
         </button>
       </aside>
 
-      <main className="lib-main">
+      <main className="lib-main" data-reorder-scroll>
         <UpdateBanner />
         {error && (
           <div className="banner banner--error lib-banner">
@@ -231,13 +250,16 @@ export default function Library({ onOpen, onSettings, error, onDismissError }: P
             )}
 
             {course.items.length ? (
-              <div className="file-list">
+              <div className={`file-list ${reorder.dragging !== null ? 'file-list--dragging' : ''}`}>
                 {course.items.map((f, i) => (
                   <FileRow
                     key={f.path}
                     file={f}
                     index={i + 1}
                     next={f.path === nextPath}
+                    handle={reorder.handleProps(i)}
+                    dragging={reorder.dragging === i}
+                    style={reorder.rowStyle(i)}
                     onOpen={() => onOpen(f.path)}
                     onRetry={async () => setView(await window.api.library.retry(f.path))}
                     actions={
@@ -258,28 +280,6 @@ export default function Library({ onOpen, onSettings, error, onDismissError }: P
                           }}
                         >
                           ✓
-                        </button>
-                        <button
-                          className="icon-btn"
-                          title="Yukarı taşı"
-                          disabled={i === 0}
-                          onClick={async (e) => {
-                            e.stopPropagation()
-                            setView(await window.api.library.moveFile(course.id, f.path, -1))
-                          }}
-                        >
-                          ↑
-                        </button>
-                        <button
-                          className="icon-btn"
-                          title="Aşağı taşı"
-                          disabled={i === course.items.length - 1}
-                          onClick={async (e) => {
-                            e.stopPropagation()
-                            setView(await window.api.library.moveFile(course.id, f.path, 1))
-                          }}
-                        >
-                          ↓
                         </button>
                         <button
                           className="icon-btn"
@@ -370,6 +370,9 @@ function FileRow({
   index,
   subtitle,
   next,
+  handle,
+  dragging,
+  style,
   onOpen,
   onRetry,
   actions
@@ -379,18 +382,32 @@ function FileRow({
   subtitle?: string
   /** Derste sıradaki (sunulmamış ilk) sunu */
   next?: boolean
+  /** Sürükleyerek sıralama tutamacı (yalnızca ders listesinde) */
+  handle?: React.HTMLAttributes<HTMLElement>
+  dragging?: boolean
+  style?: React.CSSProperties
   onOpen: () => void
   onRetry?: () => void
   actions?: React.ReactNode
 }): React.JSX.Element {
   const missing = file.status === 'missing'
   const done = file.presentedAt != null
+  const cls = ['file-row', missing && 'file-row--missing', done && 'file-row--done', next && 'file-row--next', dragging && 'file-row--dragging']
   return (
     <div
-      className={`file-row ${missing ? 'file-row--missing' : ''} ${done ? 'file-row--done' : ''} ${next ? 'file-row--next' : ''}`}
+      className={cls.filter(Boolean).join(' ')}
+      style={style}
+      data-reorder-row
       onClick={() => !missing && onOpen()}
       role="button"
     >
+      {handle && (
+        <button className="drag-handle" title="Sürükleyerek sırala" aria-label="Sırala" {...handle}>
+          <svg viewBox="0 0 10 16" width="10" height="16" aria-hidden="true">
+            {[3, 8, 13].flatMap((y) => [2, 8].map((x) => <circle key={`${x}-${y}`} cx={x} cy={y} r="1.5" />))}
+          </svg>
+        </button>
+      )}
       {index != null && <span className="file-row__index">{index}</span>}
       <div className="file-row__main">
         <div className="file-row__name" title={file.path}>

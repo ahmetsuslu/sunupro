@@ -233,13 +233,14 @@ export function registerLibrary(getMain: () => BrowserWindow | null): void {
     return view()
   })
 
+  // Sürükle-bırak sıralama: dosya delta kadar yukarı/aşağı taşınır, aradakiler bir kayar
   ipcMain.handle('library:move-file', (_e, id: string, path: string, delta: number) => {
     updateCourse(id, (c) => {
       const i = c.files.findIndex((f) => sameFile(f, path))
       const j = i + delta
-      if (i < 0 || j < 0 || j >= c.files.length) return c
+      if (i < 0 || j < 0 || j >= c.files.length || j === i) return c
       const files = [...c.files]
-      ;[files[i], files[j]] = [files[j], files[i]]
+      files.splice(j, 0, ...files.splice(i, 1))
       return { ...c, files }
     })
     return view()

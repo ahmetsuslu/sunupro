@@ -298,6 +298,47 @@
 .file-row__actions .icon-btn:disabled {
   opacity: 0.3;
 }
+/* Sürükleyerek sıralama: tutamaç (parmakla da tutulabilecek boyutta), sürüklenen satır yükselir */
+.drag-handle {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 44px;
+  margin: 0 -6px 0 -8px;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: grab;
+  touch-action: none;
+}
+.drag-handle svg {
+  fill: currentColor;
+}
+.drag-handle:hover,
+.drag-handle:focus-visible {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+.file-list--dragging {
+  user-select: none;
+}
+.file-list--dragging .file-row {
+  transition: transform 160ms ease;
+}
+.file-list--dragging .file-row.file-row--dragging {
+  transition: none;
+  cursor: grabbing;
+  border-color: var(--accent);
+  background: var(--bg-elevated);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
+}
+.file-list--dragging .file-row--dragging .drag-handle {
+  cursor: grabbing;
+  color: var(--text-primary);
+}
+
 /* Sunuldu: ad sönük, işaret yeşil; sıradaki sunu vurgulu */
 .file-row--done .file-row__name {
   color: var(--text-secondary);

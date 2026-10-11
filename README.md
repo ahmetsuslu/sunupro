@@ -44,7 +44,8 @@ PowerPoint'in sunucu görünümünde ders anlatırken eksik kalan noktalar için
 - **Dokunmatik, kalem ve fare:** parmakla çizim, kalem (stylus) basıncı, kalemin silgi ucu, avuç reddi,
   araç seçili değilken parmakla kaydırarak slayt değiştirme; fare tekerleğiyle ileri/geri.
 - **Ders kütüphanesi:** dersler, klasör bağlama (doğal sıralama: Hafta 1, 2, 10), arka planda ön
-  hazırlık (ders anında açılış anlık), son açılanlar.
+  hazırlık (ders anında açılış anlık), son açılanlar; sunular tutamaçtan tutup sürükleyerek (fare ya
+  da parmakla) sıralanır.
 - **Sunuldu takibi:** son slayta gelinen sunu kendiliğinden "sunuldu" olarak işaretlenir; ✓ ile elle
   işaretlenir ya da kaldırılır (Shift+✓ üsttekilerle birlikte işaretler). Derste sıradaki sunu vurgulanır.
 - **Ara modu (`A`):** projeksiyonda geri sayım ve dönüş saati, süre sayacı durur. Sunum boyunca ekran
