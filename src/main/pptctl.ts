@@ -3,6 +3,7 @@ import { spawn, type ChildProcessWithoutNullStreams } from 'child_process'
 import { createInterface } from 'readline'
 import { EventEmitter } from 'events'
 import { join } from 'path'
+import { log } from './log'
 
 type Pending = {
   resolve: (value: unknown) => void
@@ -49,7 +50,7 @@ export class PptController extends EventEmitter {
       this.proc = proc
       let started = false
 
-      proc.stderr.on('data', (d: Buffer) => console.error('[pptctl]', d.toString()))
+      proc.stderr.on('data', (d: Buffer) => log('[pptctl]', d.toString()))
       proc.on('error', (err) => {
         if (!started) reject(err)
       })

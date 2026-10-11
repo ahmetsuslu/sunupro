@@ -8,6 +8,7 @@ import { physicalCenter, pickAudienceDisplay, pickPresenterDisplay } from './dis
 import { connectPorts, createOverlayWindow, fitToDisplay } from './windows'
 import { loadSettings, saveSettings } from './store'
 import { getSession, markRecent, saveSession } from './sessions'
+import { log } from './log'
 import {
   ShowScreen,
   type AudienceConfig,
@@ -73,7 +74,7 @@ async function toResult<T>(fn: () => Promise<T>): Promise<Result<T>> {
   try {
     return { ok: true, value: await fn() }
   } catch (err) {
-    console.error(err)
+    log('[hata]', err)
     return { ok: false, ...friendlyError(err) }
   }
 }

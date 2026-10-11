@@ -3,6 +3,7 @@ import type { LibraryCourse, LibraryFile, LibraryView } from '@shared/types'
 import CourseDialog from '../components/CourseDialog'
 import ConfirmDialog from '../components/ConfirmDialog'
 import { timeAgo } from '../lib/time'
+import UpdateBanner from '../components/UpdateBanner'
 
 type Props = {
   onOpen: (path: string) => void
@@ -105,6 +106,7 @@ export default function Library({ onOpen, onSettings, error, onDismissError }: P
       </aside>
 
       <main className="lib-main">
+        <UpdateBanner />
         {error && (
           <div className="banner banner--error lib-banner">
             <span>{error}</span>

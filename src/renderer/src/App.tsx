@@ -4,6 +4,7 @@ import ErrorBoundary from './components/ErrorBoundary'
 import Library from './views/Library'
 import Presenter from './views/Presenter'
 import Overlay from './views/Overlay'
+import SettingsModal from './components/SettingsModal'
 
 export default function App(): React.JSX.Element {
   // Seyirci ekranındaki pencere ayrı, aynı bundle'ın #/overlay rotasıyla açılır
@@ -21,7 +22,7 @@ function Shell(): React.JSX.Element {
   const [presentation, setPresentation] = useState<PresentationInfo | null>(null)
   const [opening, setOpening] = useState<Opening | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [, setSettingsOpen] = useState(false)
+  const [settingsOpen, setSettingsOpen] = useState(false)
 
   useEffect(
     () =>
@@ -55,10 +56,17 @@ function Shell(): React.JSX.Element {
   return (
     <>
       {presentation ? (
-        <Presenter key={presentation.path} presentation={presentation} onClose={close} />
+        <Presenter
+          key={presentation.path}
+          presentation={presentation}
+          onClose={close}
+          onSettings={() => setSettingsOpen(true)}
+          inputBlocked={settingsOpen}
+        />
       ) : (
         <Library onOpen={open} onSettings={() => setSettingsOpen(true)} error={error} onDismissError={() => setError(null)} />
       )}
+      {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}
       {opening && (
         <div className="modal-overlay">
           <div className="modal opening">

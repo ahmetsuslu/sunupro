@@ -15,12 +15,18 @@ import { InkStore } from '../lib/ink-store'
 import { updateSettings, useSettings } from '../lib/settings'
 import { formatCountdown, timeAgo } from '../lib/time'
 
-type Props = { presentation: PresentationInfo; onClose: () => void }
+type Props = {
+  presentation: PresentationInfo
+  onClose: () => void
+  onSettings: () => void
+  /** Ayarlar penceresi açık: sunum kısayolları devre dışı */
+  inputBlocked: boolean
+}
 type Point = { x: number; y: number }
 
 const DEFAULT_INK: InkPrefs = { penColor: PEN_COLORS[0], penSize: 1, hlColor: HL_COLORS[0], hlSize: 1 }
 
-export default function Presenter({ presentation: p, onClose }: Props): React.JSX.Element {
+export default function Presenter({ presentation: p, onClose, onSettings, inputBlocked }: Props): React.JSX.Element {
   // Kaldığın yerden devam: dosyanın son konumu (baştaysa sormaya gerek yok)
   const session = p.session
   const resumable =
@@ -249,7 +255,7 @@ export default function Presenter({ presentation: p, onClose }: Props): React.JS
           else if (running) setConfirmEnd(true)
         }
       }
-  useShortcuts(handlers, !confirmEnd && !confirmClearAll)
+  useShortcuts(handlers, !confirmEnd && !confirmClearAll && !inputBlocked)
 
   const remainingClicks = running ? Math.max(0, (state.clickCount ?? 0) - (state.click ?? 0)) : 0
 
@@ -302,6 +308,9 @@ export default function Presenter({ presentation: p, onClose }: Props): React.JS
         )}
         <Clock />
         <DisplayMenu running={running} />
+        <button className="icon-btn icon-btn--lg" onClick={onSettings} title="Ayarlar (kısayollar, ara süresi…)">
+          ⚙
+        </button>
         {running ? (
           <button className="btn btn--danger" onClick={() => setConfirmEnd(true)}>
             Sunumu bitir

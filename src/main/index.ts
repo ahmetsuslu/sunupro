@@ -1,4 +1,5 @@
-import { app, BrowserWindow, ipcMain, net, protocol } from 'electron'
+import { app, BrowserWindow, ipcMain, net, protocol, shell } from 'electron'
+import { existsSync, readdirSync, rmSync, statSync } from 'fs'
 import { join } from 'path'
 import { pathToFileURL } from 'url'
 import { ppt } from './pptctl'
@@ -8,6 +9,8 @@ import { createMainWindow } from './windows'
 import { runSpike } from './spike'
 import { flushLibrary, registerLibrary } from './library'
 import { flushSessions } from './sessions'
+import { registerUpdater } from './updater'
+import { log, logDir } from './log'
 import type { Settings } from '../shared/types'
 
 let mainWindow: BrowserWindow | null = null
@@ -44,6 +47,32 @@ function registerSettingsIpc(): void {
   })
 }
 
+/** Önbellek boyutu ve temizleme (açık sununun görselleri korunur) */
+function registerCacheIpc(): void {
+  const dirSize = (dir: string): number => {
+    let total = 0
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const p = join(dir, entry.name)
+      total += entry.isDirectory() ? dirSize(p) : statSync(p).size
+    }
+    return total
+  }
+  ipcMain.handle('cache:info', () => {
+    if (!existsSync(cacheRoot())) return { bytes: 0, presentations: 0 }
+    return { bytes: dirSize(cacheRoot()), presentations: readdirSync(cacheRoot()).length }
+  })
+  ipcMain.handle('cache:clear', () => {
+    if (!existsSync(cacheRoot())) return
+    const keep = show.presentation?.cacheKey
+    for (const name of readdirSync(cacheRoot())) {
+      if (name !== keep) rmSync(join(cacheRoot(), name), { recursive: true, force: true })
+    }
+    log('Önbellek temizlendi')
+  })
+}
+
+process.on('uncaughtException', (err) => log('[uncaught]', err))
+
 app.whenReady().then(() => {
   protocol.handle('sunu', (request) => {
     const url = new URL(request.url)
@@ -52,8 +81,14 @@ app.whenReady().then(() => {
     return net.fetch(pathToFileURL(join(cacheRoot(), m[1], m[2])).toString())
   })
 
+  log(`Sunu Pro ${app.getVersion()} başladı`)
   ipcMain.handle('app:version', () => app.getVersion())
+  ipcMain.handle('shell:open-external', (_e, url: string) => {
+    if (/^https:\/\//i.test(url)) return shell.openExternal(url)
+  })
+  ipcMain.handle('shell:open-logs', () => shell.openPath(logDir()))
   registerSettingsIpc()
+  registerCacheIpc()
   registerShow(() => mainWindow)
   registerLibrary(() => mainWindow)
 
@@ -63,9 +98,10 @@ app.whenReady().then(() => {
     mainWindow = null
     app.quit()
   })
+  registerUpdater(() => mainWindow)
 
   // PowerPoint denetleyicisini arka planda ısıt (ilk sunu açılışı hızlı olsun)
-  ppt.start().catch((err) => console.error('[pptctl] başlatılamadı:', err))
+  ppt.start().catch((err) => log('[pptctl] başlatılamadı:', err))
 
   const spikeOut = process.env['SUNU_SPIKE']
   if (spikeOut) runSpike(mainWindow, spikeOut)

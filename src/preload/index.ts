@@ -78,7 +78,23 @@ const api = {
     getPathForFile: (file: File): string => webUtils.getPathForFile(file)
   },
   app: {
-    getVersion: (): Promise<string> => ipcRenderer.invoke('app:version')
+    getVersion: (): Promise<string> => ipcRenderer.invoke('app:version'),
+    openExternal: (url: string): Promise<void> => ipcRenderer.invoke('shell:open-external', url),
+    openLogs: (): Promise<string> => ipcRenderer.invoke('shell:open-logs')
+  },
+  cache: {
+    info: (): Promise<{ bytes: number; presentations: number }> => ipcRenderer.invoke('cache:info'),
+    clear: (): Promise<void> => ipcRenderer.invoke('cache:clear')
+  },
+  // Otomatik güncelleme (GitHub Releases)
+  updates: {
+    check: (): Promise<boolean> => ipcRenderer.invoke('update:check'),
+    install: (): Promise<void> => ipcRenderer.invoke('update:install'),
+    onAvailable: (cb: (version: string) => void): (() => void) => sub('update:available', cb),
+    onProgress: (cb: (percent: number) => void): (() => void) => sub('update:progress', cb),
+    onDownloaded: (cb: (version: string) => void): (() => void) => sub('update:downloaded', cb),
+    onNone: (cb: () => void): (() => void) => sub('update:none', cb),
+    onError: (cb: (message: string) => void): (() => void) => sub('update:error', cb)
   },
   // Otomatik doğrulama kancaları (yalnızca SUNU_SPIKE ile kullanılır)
   spike: {
