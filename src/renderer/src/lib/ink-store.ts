@@ -92,6 +92,19 @@ export class InkStore {
     this.emit(slide)
   }
 
+  /** Kaydedilmiş çizimleri yükler (geçmiş sıfırlanır); sunuda artık olmayan slaytlar atlanır. */
+  load(ink: InkMap, slideCount: number): void {
+    this.map.clear()
+    this.undoStack.clear()
+    this.redoStack.clear()
+    for (const [key, strokes] of Object.entries(ink)) {
+      const slide = Number(key)
+      if (slide >= 1 && slide <= slideCount && strokes.length) this.map.set(slide, strokes)
+      for (const s of strokes) this.nextSeq = Math.max(this.nextSeq, s.seq + 1)
+    }
+    this.emit(null)
+  }
+
   /** Tüm slaytlar: geri alınamaz (onay sorulduktan sonra çağrılır). */
   clearAll(): void {
     this.map.clear()

@@ -3,6 +3,7 @@ import { ShowScreen, type AudienceConfig, type InkMap, type ShowState } from '@s
 import { containRect } from '../lib/geometry'
 import { onOverlayMessage } from '../lib/overlay-port'
 import { InkRenderer } from '../lib/ink-render'
+import { formatCountdown } from '../lib/time'
 import { slideUrl } from '../lib/slides'
 import { fillStroke, type StrokePoint } from '../lib/stroke'
 
@@ -51,6 +52,41 @@ export default function Overlay(): React.JSX.Element {
       )}
       <InkLayer aspect={aspect} slide={slide} hidden={blank} />
       <LaserLayer aspect={aspect} hidden={blank} />
+      <BreakScreen />
+    </div>
+  )
+}
+
+/** Ara modu: gösterinin üstünü kaplayan geri sayım ekranı. */
+function BreakScreen(): React.JSX.Element | null {
+  const [until, setUntil] = useState<number | null>(null)
+  const [now, setNow] = useState(Date.now())
+
+  useEffect(
+    () =>
+      onOverlayMessage((m) => {
+        if (m.t === 'break') setUntil(m.until)
+      }),
+    []
+  )
+  useEffect(() => {
+    if (!until) return
+    setNow(Date.now())
+    const id = window.setInterval(() => setNow(Date.now()), 250)
+    return () => window.clearInterval(id)
+  }, [until])
+
+  if (!until) return null
+  const left = until - now
+  return (
+    <div className="break-screen">
+      <div className="break-screen__title">{left > 0 ? 'Ara' : 'Ara bitti'}</div>
+      <div className="break-screen__count">{left > 0 ? formatCountdown(left) : 'Derse dönüyoruz'}</div>
+      {left > 0 && (
+        <div className="break-screen__back">
+          Derse dönüş: {new Date(until).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}
+        </div>
+      )}
     </div>
   )
 }

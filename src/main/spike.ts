@@ -311,6 +311,84 @@ Start-Sleep -Milliseconds 150; [void][M]::SetCursorPos($old.X, $old.Y)`
       `$app = New-Object -ComObject PowerPoint.Application\n$hit = $null\nforeach ($p in $app.Presentations) { if ($p.FullName -eq '${copy}') { $hit = $p } }\nif ($hit) { 'ACIK windows=' + $hit.Windows.Count; $hit.Close() } else { 'KAPANMIS' }`
     )
     check('kullanıcının belgesi açık kaldı', still.startsWith('ACIK'), still)
+
+    // H — Kütüphane, ön hazırlık, kaldığın yerden devam, ara modu, çizim saklama (arayüz üzerinden)
+    const js = <T>(code: string): Promise<T> => main.webContents.executeJavaScript(code) as Promise<T>
+    const clickButton = (text: string): Promise<boolean> =>
+      js(`(() => { const b = [...document.querySelectorAll('button')].find((x) => x.textContent.includes(${JSON.stringify(text)})); b?.click(); return !!b })()`)
+    type View = { courses: { id: string; items: { name: string; status: string; session: { slide: number } | null }[] }[] }
+
+    await js(`document.querySelector('button[title="Sunuyu kapat"]')?.click()`)
+    await waitFor(() => !show.presentation, 5000)
+    await sleep(600)
+    check('Kapat → kütüphane ekranı', await js<boolean>(`!!document.querySelector('.library')`))
+
+    const folder = join(outDir, 'ders-klasoru')
+    mkdirSync(folder, { recursive: true })
+    for (const n of ['Hafta 10', 'Hafta 2', 'Hafta 1']) writeFileSync(join(folder, `${n}.pptx`), readFileSync(sample))
+    const v1 = await js<View>(`window.api.library.createCourse('Test Dersi', '#4f8cff')`)
+    const courseId = v1.courses[0].id
+    const v2 = await js<View>(`window.api.library.addFiles(${JSON.stringify(courseId)}, ${JSON.stringify([sample, folder])})`)
+    const names = v2.courses[0].items.map((i) => i.name)
+    check('ders + klasör bağlama (doğal sıralama)', names.join('|') === 'ornek-sunu.pptx|Hafta 1.pptx|Hafta 2.pptx|Hafta 10.pptx', names)
+
+    let ready = false
+    const tPrep = Date.now()
+    for (let i = 0; i < 120 && !ready; i++) {
+      const v = await js<View>(`window.api.library.get()`)
+      ready = v.courses[0].items.every((it) => it.status === 'ready')
+      if (!ready) await sleep(500)
+    }
+    check('arka planda ön hazırlık → hepsi hazır', ready, { ms: Date.now() - tPrep })
+
+    // Seçili dersi göster, ekran görüntüsü
+    await clickButton('Test Dersi')
+    await sleep(500)
+    await shot('h0-kutuphane', 'presenter')
+
+    const sess = (await js<View>(`window.api.library.get()`)).courses[0].items.find((i) => i.name === 'ornek-sunu.pptx')?.session
+    check('örnek sunu için kalınan yer kayıtlı', !!sess && sess.slide >= 1, sess)
+
+    await js(`[...document.querySelectorAll('.file-row')].find((r) => r.textContent.includes('ornek-sunu')).click()`)
+    await waitFor(() => show.presentation?.name === 'ornek-sunu.pptx', 15000)
+    await sleep(800)
+    check('açılışta "kaldığın yerden devam" önerisi', await js<boolean>(`document.body.innerText.includes('üzerinde kalmıştın')`))
+    await shot('h1-devam-onerisi', 'presenter')
+    await clickButton('Kaldığın yerden devam')
+    await waitFor(() => show.state.running, 8000)
+    await sleep(800)
+    check('devam → kalınan slayttan başladı', show.state.slide === sess?.slide, { state: show.state.slide, sess })
+
+    main.focus()
+    press(main, 'A')
+    await sleep(800)
+    check('A → ara modu (sunucuda şerit)', await js<boolean>(`!!document.querySelector('.banner--break')`))
+    await shot('h2-ara-seyirci', 'audience')
+    press(main, 'A')
+    await sleep(400)
+    check('A tekrar → derse dönüş', !(await js<boolean>(`!!document.querySelector('.banner--break')`)))
+
+    // Çizim saklama: ayarı aç, çiz, kapat-aç → çizim geri gelmeli
+    await js(`window.api.settings.set({ rememberInk: true })`)
+    await sleep(300)
+    const drawSlide = show.state.slide ?? 1
+    press(main, '3')
+    await sleep(200)
+    await drag(line(0.2, 0.3, 0.6, 0.35))
+    await sleep(300)
+    const inkBefore = await inkCount(drawSlide)
+    await show.stop()
+    await sleep(500)
+    await js(`document.querySelector('button[title="Sunuyu kapat"]')?.click()`)
+    await waitFor(() => !show.presentation, 5000)
+    await sleep(800)
+    await js(`[...document.querySelectorAll('.file-row')].find((r) => r.textContent.includes('ornek-sunu')).click()`)
+    await waitFor(() => show.presentation?.name === 'ornek-sunu.pptx', 15000)
+    await sleep(1500)
+    check('çizim saklama: kapatıp açınca çizim yerinde', inkBefore === 1 && (await inkCount(drawSlide)) === 1, {
+      inkBefore,
+      after: await inkCount(drawSlide)
+    })
   } catch (err) {
     check('beklenmeyen hata', false, String((err as Error)?.stack ?? err))
   } finally {

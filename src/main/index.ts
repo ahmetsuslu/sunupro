@@ -6,9 +6,14 @@ import { cacheRoot, registerShow, show } from './show'
 import { loadSettings, saveSettings } from './store'
 import { createMainWindow } from './windows'
 import { runSpike } from './spike'
+import { flushLibrary, registerLibrary } from './library'
+import { flushSessions } from './sessions'
 import type { Settings } from '../shared/types'
 
 let mainWindow: BrowserWindow | null = null
+
+// Otomatik doğrulama kullanıcının gerçek kütüphane/ayar verisine dokunmasın
+if (process.env['SUNU_SPIKE']) app.setPath('userData', join(process.env['SUNU_SPIKE'], 'userdata'))
 
 // Önbellekteki slayt görselleri: sunu://cache/<anahtar>/slide-001.png | thumb-001.png
 protocol.registerSchemesAsPrivileged([
@@ -50,6 +55,7 @@ app.whenReady().then(() => {
   ipcMain.handle('app:version', () => app.getVersion())
   registerSettingsIpc()
   registerShow(() => mainWindow)
+  registerLibrary(() => mainWindow)
 
   mainWindow = createMainWindow(show.displays().presenter)
   // Ana pencere kapanınca (katman açık olsa bile) uygulama kapanır
@@ -70,6 +76,8 @@ app.on('before-quit', (e) => {
   if (quitting) return
   quitting = true
   e.preventDefault()
+  flushSessions()
+  flushLibrary()
   show
     .stop()
     .catch(() => undefined)

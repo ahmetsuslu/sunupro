@@ -1,6 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 
-export type Timer = { elapsedSec: number; paused: boolean; toggle: () => void; reset: () => void }
+export type Timer = {
+  elapsedSec: number
+  paused: boolean
+  toggle: () => void
+  pause: () => void
+  resume: () => void
+  reset: () => void
+}
 
 /** Gösteri süresi: gösteri başlayınca işlemeye başlar; duraklatılabilir ve sıfırlanabilir. */
 export function useTimer(running: boolean): Timer {
@@ -33,6 +40,14 @@ export function useTimer(running: boolean): Timer {
     }
   }, [])
 
+  const pause = useCallback(() => {
+    if (since.current != null) toggle()
+  }, [toggle])
+
+  const resume = useCallback(() => {
+    if (since.current == null) toggle()
+  }, [toggle])
+
   const reset = useCallback(() => {
     acc.current = 0
     since.current = since.current != null ? Date.now() : null
@@ -40,7 +55,7 @@ export function useTimer(running: boolean): Timer {
   }, [])
 
   const ms = acc.current + (since.current != null ? Date.now() - since.current : 0)
-  return { elapsedSec: Math.floor(ms / 1000), paused, toggle, reset }
+  return { elapsedSec: Math.floor(ms / 1000), paused, toggle, pause, resume, reset }
 }
 
 export function formatDuration(sec: number): string {

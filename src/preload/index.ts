@@ -1,5 +1,15 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
-import type { AudienceConfig, DisplayInfo, PresentationInfo, Result, Settings, ShowMode, ShowState } from '../shared/types'
+import type {
+  AudienceConfig,
+  DisplayInfo,
+  InkMap,
+  LibraryView,
+  PresentationInfo,
+  Result,
+  Settings,
+  ShowMode,
+  ShowState
+} from '../shared/types'
 
 type ShowCmd = 'next' | 'prev' | 'goto' | 'screen' | 'state'
 
@@ -16,10 +26,34 @@ const api = {
       ipcRenderer.invoke('show:start', opts),
     cmd: (cmd: ShowCmd, args?: Record<string, unknown>): Promise<ShowState> => ipcRenderer.invoke('show:cmd', cmd, args),
     stop: (): Promise<ShowState> => ipcRenderer.invoke('show:stop'),
+    /** Sunucu ekranından çıkış: sunu PowerPoint'ten bırakılır */
+    close: (): Promise<void> => ipcRenderer.invoke('show:close'),
     getState: (): Promise<ShowState> => ipcRenderer.invoke('show:get-state'),
     onState: (cb: (state: ShowState) => void): (() => void) => sub('show:state', cb),
     onExportProgress: (cb: (p: { done: number; total: number }) => void): (() => void) =>
       sub('show:export-progress', cb)
+  },
+  library: {
+    get: (): Promise<LibraryView> => ipcRenderer.invoke('library:get'),
+    createCourse: (name: string, color: string): Promise<LibraryView> =>
+      ipcRenderer.invoke('library:create-course', name, color),
+    updateCourse: (id: string, patch: { name?: string; color?: string }): Promise<LibraryView> =>
+      ipcRenderer.invoke('library:update-course', id, patch),
+    deleteCourse: (id: string): Promise<LibraryView> => ipcRenderer.invoke('library:delete-course', id),
+    /** paths verilmezse dosya seçme penceresi açılır */
+    addFiles: (id: string, paths?: string[]): Promise<LibraryView> => ipcRenderer.invoke('library:add-files', id, paths),
+    linkFolder: (id: string): Promise<LibraryView> => ipcRenderer.invoke('library:link-folder', id),
+    unlinkFolder: (id: string): Promise<LibraryView> => ipcRenderer.invoke('library:unlink-folder', id),
+    removeFile: (id: string, path: string): Promise<LibraryView> => ipcRenderer.invoke('library:remove-file', id, path),
+    moveFile: (id: string, path: string, delta: number): Promise<LibraryView> =>
+      ipcRenderer.invoke('library:move-file', id, path, delta),
+    retry: (path: string): Promise<LibraryView> => ipcRenderer.invoke('library:retry', path),
+    forgetRecent: (path: string): Promise<LibraryView> => ipcRenderer.invoke('library:forget-recent', path),
+    onChange: (cb: (view: LibraryView) => void): (() => void) => sub('library:changed', cb)
+  },
+  ink: {
+    load: (path: string): Promise<InkMap | null> => ipcRenderer.invoke('ink:load', path),
+    save: (path: string, ink: InkMap): Promise<void> => ipcRenderer.invoke('ink:save', path, ink)
   },
   displays: {
     list: (): Promise<DisplayInfo[]> => ipcRenderer.invoke('displays:list'),

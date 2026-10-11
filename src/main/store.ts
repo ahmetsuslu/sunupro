@@ -9,6 +9,8 @@ const DEFAULTS: Settings = {
   notesFontSize: 20,
   shortcuts: {},
   ink: { penColor: '#e53935', penSize: 1, hlColor: '#ffeb3b', hlSize: 1 },
+  breakMinutes: 10,
+  rememberInk: false,
   autoUpdate: true
 }
 

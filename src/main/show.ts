@@ -7,6 +7,7 @@ import { PptError, ppt } from './pptctl'
 import { physicalCenter, pickAudienceDisplay, pickPresenterDisplay } from './displays'
 import { connectPorts, createOverlayWindow, fitToDisplay } from './windows'
 import { loadSettings, saveSettings } from './store'
+import { getSession, markRecent, saveSession } from './sessions'
 import {
   ShowScreen,
   type AudienceConfig,
@@ -106,7 +107,17 @@ function cacheKeyFor(path: string): string {
   return createHash('sha1').update(`${path.toLowerCase()}|${st.size}|${st.mtimeMs}`).digest('hex').slice(0, 16)
 }
 
-type OpenResult = Omit<PresentationInfo, 'name' | 'cacheKey'>
+type OpenResult = Omit<PresentationInfo, 'name' | 'cacheKey' | 'session'>
+
+/** Dosyanın slayt görselleri güncel biçimde önbellekte mi (sunu açılmadan, dosya bilgisinden) */
+export function isPrepared(path: string): boolean {
+  try {
+    const manifest = join(cacheRoot(), cacheKeyFor(path), 'manifest.json')
+    return JSON.parse(readFileSync(manifest, 'utf-8')).v === CACHE_VERSION
+  } catch {
+    return false
+  }
+}
 
 /**
  * Sunum oturumu: PowerPoint gösterisi (canlı mod) ya da önizleme görselleri (görsel mod) +
@@ -124,6 +135,11 @@ class ShowController {
   private pollTimer: NodeJS.Timeout | null = null
   /** Görsel modda gösteri durumunu biz tutarız */
   private img = { slide: 1, screen: ShowScreen.Running as ShowScreen }
+  /** Arka plan hazırlama kuyruğu, PowerPoint'i kullanmadan önce durdurulur / sunu kapanınca sürer */
+  hooks: { beforeOpen: () => Promise<void>; afterClose: () => void } = {
+    beforeOpen: async () => undefined,
+    afterClose: () => undefined
+  }
 
   constructor(private getMain: () => BrowserWindow | null) {}
 
@@ -140,6 +156,14 @@ class ShowController {
     this.state = next
     const keys: (keyof ShowState)[] = ['running', 'slide', 'click', 'clickCount', 'state', 'detached', 'atEnd']
     if (force || keys.some((k) => prev[k] !== next[k])) this.broadcast('show:state', next)
+    // Kaldığın yerden devam: her konum değişimi kaydedilir (ara verip kapatınca kaybolmasın)
+    if (next.running && next.slide && this.presentation) {
+      saveSession(this.presentation.path, {
+        slide: next.slide,
+        click: next.click ?? 0,
+        slideCount: this.presentation.slideCount
+      })
+    }
     return next
   }
 
@@ -148,6 +172,7 @@ class ShowController {
   async open(path: string): Promise<PresentationInfo> {
     preflight(path)
     if (this.state.running) await this.stop()
+    await this.hooks.beforeOpen()
     const info = await ppt.call<OpenResult>('open', { path }, 120_000)
     const cacheKey = cacheKeyFor(path)
     await this.ensureCache(cacheKey, info)
@@ -156,9 +181,35 @@ class ShowController {
       slides: info.slides ?? [],
       name: basename(path),
       cacheKey,
-      openedCopy: !!info.openedCopy
+      openedCopy: !!info.openedCopy,
+      session: getSession(path)
     }
+    markRecent(path)
     return this.presentation
+  }
+
+  /** Sunucu ekranı kapandı: sunuyu PowerPoint'ten bırak, arka plan hazırlığı sürsün. */
+  async close(): Promise<void> {
+    if (this.state.running) await this.stop()
+    this.presentation = null
+    await ppt.call('close').catch(() => undefined)
+    this.hooks.afterClose()
+  }
+
+  /**
+   * Arka planda ön hazırlık: slayt görsellerini üretip sunuyu kapatır. Yalnızca sunucu ekranında
+   * açık bir sunu yokken çağrılmalı (PowerPoint denetleyicisi tek sunu tutar).
+   */
+  async prepare(path: string): Promise<void> {
+    if (this.presentation) throw new UserError('BUSY', 'Açık bir sunu var.')
+    preflight(path)
+    if (isPrepared(path)) return
+    try {
+      const info = await ppt.call<OpenResult>('open', { path }, 120_000)
+      await this.ensureCache(cacheKeyFor(path), info)
+    } finally {
+      await ppt.call('close').catch(() => undefined)
+    }
   }
 
   /** Slayt görselleri + küçük resimler önbellekte yoksa (veya biçim eskiyse) üretir. */
@@ -500,6 +551,7 @@ export function registerShow(getMain: () => BrowserWindow | null): void {
   ipcMain.handle('show:start', (_e, opts) => toResult(() => show.start(opts ?? {})))
   ipcMain.handle('show:cmd', (_e, cmd, args) => show.command(cmd, args))
   ipcMain.handle('show:stop', () => show.stop())
+  ipcMain.handle('show:close', () => show.close())
   ipcMain.handle('show:get-state', () => show.state)
   ipcMain.handle('displays:list', () => show.listDisplays())
   ipcMain.handle('displays:swap', async () => {

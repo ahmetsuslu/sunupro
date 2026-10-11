@@ -13,6 +13,7 @@ import { formatDuration, useTimer } from '../lib/use-timer'
 import { COLOR_NAMES, HL_COLORS, PEN_COLORS, type Tool } from '../lib/tools'
 import { InkStore } from '../lib/ink-store'
 import { updateSettings, useSettings } from '../lib/settings'
+import { formatCountdown, timeAgo } from '../lib/time'
 
 type Props = { presentation: PresentationInfo; onClose: () => void }
 type Point = { x: number; y: number }
@@ -20,8 +21,16 @@ type Point = { x: number; y: number }
 const DEFAULT_INK: InkPrefs = { penColor: PEN_COLORS[0], penSize: 1, hlColor: HL_COLORS[0], hlSize: 1 }
 
 export default function Presenter({ presentation: p, onClose }: Props): React.JSX.Element {
+  // Kaldığın yerden devam: dosyanın son konumu (baştaysa sormaya gerek yok)
+  const session = p.session
+  const resumable =
+    !!session && session.slide >= 1 && session.slide <= p.slideCount && (session.slide !== firstVisible(p) || session.click > 0)
+  const [resumeOpen, setResumeOpen] = useState(resumable)
   const [state, setState] = useState<ShowState>({ running: false })
-  const [previewSlide, setPreviewSlide] = useState(() => firstVisible(p))
+  const [previewSlide, setPreviewSlide] = useState(() => (resumable ? session!.slide : firstVisible(p)))
+  const [breakUntil, setBreakUntil] = useState<number | null>(null)
+  const breakRef = useRef<number | null>(null)
+  breakRef.current = breakUntil
   const [tool, setTool] = useState<Tool>('none')
   const [gridOpen, setGridOpen] = useState(false)
   const [confirmEnd, setConfirmEnd] = useState(false)
@@ -52,9 +61,38 @@ export default function Presenter({ presentation: p, onClose }: Props): React.JS
       onOverlayPort((port) => {
         portRef.current = port
         post(port, { t: 'ink-all', ink: ink.all() })
+        if (breakRef.current) post(port, { t: 'break', until: breakRef.current })
       }),
     [ink]
   )
+
+  // Çizimleri dosya bazında saklama (ayar açıksa): açılışta yükle, değişince kısa gecikmeyle kaydet
+  const rememberInk = settings?.rememberInk ?? false
+  const inkLoaded = useRef(false)
+  useEffect(() => {
+    if (!rememberInk || inkLoaded.current) return
+    inkLoaded.current = true
+    window.api.ink.load(p.path).then((map) => map && ink.load(map, p.slideCount))
+  }, [rememberInk, ink, p.path, p.slideCount])
+  useEffect(() => {
+    if (!rememberInk) return
+    let timer: number | undefined
+    const save = (): void => {
+      timer = undefined
+      window.api.ink.save(p.path, ink.all())
+    }
+    const off = ink.subscribe(() => {
+      window.clearTimeout(timer)
+      timer = window.setTimeout(save, 800)
+    })
+    return () => {
+      off()
+      if (timer !== undefined) {
+        window.clearTimeout(timer)
+        save()
+      }
+    }
+  }, [rememberInk, ink, p.path])
   useEffect(
     () =>
       ink.subscribe((changed) => {
@@ -116,20 +154,49 @@ export default function Presenter({ presentation: p, onClose }: Props): React.JS
   )
 
   const start = useCallback(
-    async (from: number, mode?: ShowMode) => {
+    async (from: number, opts: { mode?: ShowMode; click?: number } = {}) => {
       setStarting(true)
       setError(null)
-      const r = await window.api.show.start({ slide: from, mode })
+      const r = await window.api.show.start({ slide: from, click: opts.click, mode: opts.mode })
       setStarting(false)
       if (!r.ok) {
         setError(r.message)
         return
       }
+      setResumeOpen(false)
       timer.reset()
       setState(r.value)
     },
     [timer]
   )
+  const resumeShow = (): Promise<void> => start(session!.slide, { click: session!.click })
+
+  // ---------- Ara modu ----------
+  const sendBreak = useCallback((until: number | null) => {
+    setBreakUntil(until)
+    post(portRef.current, { t: 'break', until })
+  }, [])
+  const startBreak = (): void => {
+    if (!running) return
+    sendBreak(Date.now() + (settings?.breakMinutes ?? 10) * 60_000)
+    timer.pause()
+  }
+  const endBreak = (): void => {
+    sendBreak(null)
+    timer.resume()
+  }
+  const extendBreak = (minutes: number): void => {
+    if (breakUntil) sendBreak(Math.max(Date.now() + 60_000, breakUntil + minutes * 60_000))
+  }
+  useEffect(() => {
+    if (!running && breakRef.current) sendBreak(null)
+  }, [running, sendBreak])
+  const [, tickBreak] = useReducer((n: number) => n + 1, 0)
+  useEffect(() => {
+    if (!breakUntil) return
+    const id = window.setInterval(tickBreak, 1000)
+    return () => window.clearInterval(id)
+  }, [breakUntil])
 
   const toggleScreen = useCallback(
     (mode: 'black' | 'white') => {
@@ -172,10 +239,13 @@ export default function Presenter({ presentation: p, onClose }: Props): React.JS
         clearAll: () => ink.hasAny() && setConfirmClearAll(true),
         black: () => toggleScreen('black'),
         white: () => toggleScreen('white'),
+        break: () => (breakUntil ? endBreak() : startBreak()),
         startShow: () => !running && !starting && start(firstVisible(p)),
-        startHere: () => !running && !starting && start(slide),
+        // Kaldığın slayttaysan animasyon adımı da geri gelir
+        startHere: () => !running && !starting && (resumeOpen && slide === session?.slide ? resumeShow() : start(slide)),
         escape: () => {
-          if (tool !== 'none') selectTool('none')
+          if (breakUntil) endBreak()
+          else if (tool !== 'none') selectTool('none')
           else if (running) setConfirmEnd(true)
         }
       }
@@ -220,12 +290,31 @@ export default function Presenter({ presentation: p, onClose }: Props): React.JS
             </button>
           </div>
         )}
+        {running && (
+          <button
+            className={`btn ${breakUntil ? 'btn--active' : ''}`}
+            onClick={() => (breakUntil ? endBreak() : startBreak())}
+            title={`Ara modu${hint('break') ? ` · Kısayol: ${hint('break')}` : ''}`}
+          >
+            {breakUntil ? 'Derse dön' : 'Ara'}
+            {hint('break') && <kbd>{hint('break')}</kbd>}
+          </button>
+        )}
         <Clock />
         <DisplayMenu running={running} />
         {running ? (
           <button className="btn btn--danger" onClick={() => setConfirmEnd(true)}>
             Sunumu bitir
           </button>
+        ) : resumeOpen && slide === session?.slide ? (
+          <>
+            <button className="btn" disabled={starting} onClick={() => start(firstVisible(p))} title={hint('startShow')}>
+              Baştan başla
+            </button>
+            <button className="btn btn--primary" disabled={starting} onClick={resumeShow} title={hint('startHere')}>
+              {starting ? 'Başlatılıyor…' : '▶ Kaldığın yerden devam'}
+            </button>
+          </>
         ) : (
           <>
             {slide !== firstVisible(p) && (
@@ -245,11 +334,44 @@ export default function Presenter({ presentation: p, onClose }: Props): React.JS
         )}
       </header>
 
+      {resumeOpen && !running && session && (
+        <div className="banner banner--info">
+          <span>
+            En son <strong>Slayt {session.slide}</strong>
+            {session.click > 0 ? ` (animasyon adımı ${session.click})` : ''} üzerinde kalmıştın · {timeAgo(session.updatedAt)}
+          </span>
+          <div className="spacer" />
+          <span className="hint">Sağ üstten devam edebilir ya da baştan başlayabilirsin.</span>
+          <button className="icon-btn" onClick={() => setResumeOpen(false)} title="Kapat">
+            ✕
+          </button>
+        </div>
+      )}
+      {breakUntil && (
+        <div className="banner banner--break">
+          <strong>Ara</strong>
+          <span className="break-count">{formatCountdown(breakUntil - Date.now())}</span>
+          <span className="hint">
+            Seyirci ekranında geri sayım gösteriliyor · dönüş{' '}
+            {new Date(breakUntil).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}
+          </span>
+          <div className="spacer" />
+          <button className="btn" onClick={() => extendBreak(-5)}>
+            −5 dk
+          </button>
+          <button className="btn" onClick={() => extendBreak(5)}>
+            +5 dk
+          </button>
+          <button className="btn btn--primary" onClick={endBreak}>
+            Derse dön
+          </button>
+        </div>
+      )}
       {error && (
         <div className="banner banner--error">
           <span>{error}</span>
           <div className="spacer" />
-          <button className="btn" onClick={() => start(slide, 'image')}>
+          <button className="btn" onClick={() => start(slide, { mode: 'image' })}>
             Görsel modda başlat
           </button>
           <button className="icon-btn" onClick={() => setError(null)} title="Kapat">

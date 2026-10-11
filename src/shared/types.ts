@@ -23,6 +23,52 @@ export type PresentationInfo = {
   cacheKey: string
   /** Dosya PowerPoint'te açık olduğu için kaydedilmiş hâlinin kopyası kullanılıyor */
   openedCopy: boolean
+  /** Bu sunuda en son kalınan yer (yoksa null) */
+  session: FileSession | null
+}
+
+/** Kaldığın yerden devam: dosya başına son konum */
+export type FileSession = {
+  slide: number
+  click: number
+  slideCount: number
+  updatedAt: number
+}
+
+export type Course = {
+  id: string
+  name: string
+  color: string
+  /** Bağlı klasör: içindeki sunular derse otomatik eklenir */
+  folder: string | null
+  /** Sıralı dosya yolları */
+  files: string[]
+  createdAt: number
+}
+
+export type FileStatus = 'ready' | 'pending' | 'preparing' | 'missing' | 'error'
+
+export type LibraryFile = {
+  path: string
+  name: string
+  status: FileStatus
+  /** Hazırlama hatası (status = error) */
+  error?: string
+  session: FileSession | null
+  /** Bağlı klasörden geldi */
+  fromFolder: boolean
+}
+
+export type LibraryCourse = Omit<Course, 'files'> & {
+  items: LibraryFile[]
+  /** Bağlı klasöre ulaşılamıyor (ör. çıkarılmış USB bellek) */
+  folderMissing: boolean
+}
+
+export type LibraryView = {
+  courses: LibraryCourse[]
+  /** Son açılanlar (yeniden eskiye) */
+  recent: (LibraryFile & { courseId: string | null; courseName: string | null })[]
 }
 
 /** PowerPoint SlideShowView.State */
@@ -93,6 +139,8 @@ export type OverlayMsg =
   | { t: 'live-begin'; slide: number; stroke: InkStroke }
   | { t: 'live-pts'; id: string; points: InkPoint[] }
   | { t: 'live-cancel'; id: string }
+  /** Ara modu: seyirci ekranında geri sayım (until: bitiş zamanı, ms) ya da kapat (null) */
+  | { t: 'break'; until: number | null }
 
 export type InkPrefs = {
   penColor: string
@@ -121,6 +169,10 @@ export type Settings = {
   shortcuts: ShortcutOverrides
   /** Kalem/vurgulayıcı renk ve kalınlık seçimi (son kullanılan) */
   ink: InkPrefs
+  /** Ara modunun varsayılan süresi (dakika) */
+  breakMinutes: number
+  /** Çizimleri dosya bazında sakla ve sunu yeniden açılınca geri getir */
+  rememberInk: boolean
   autoUpdate: boolean
 }
 

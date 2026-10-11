@@ -1,0 +1,422 @@
+/* ---------- Kütüphane (ana ekran) ---------- */
+.library {
+  height: 100%;
+  display: grid;
+  grid-template-columns: 280px 1fr;
+}
+.library--drag .lib-main {
+  outline: 2px dashed var(--accent);
+  outline-offset: -10px;
+}
+.lib-side {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 18px 12px;
+  background: var(--bg-panel);
+  border-right: 1px solid var(--border);
+  min-height: 0;
+}
+.lib-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 18px;
+  font-weight: 700;
+  padding: 0 8px 16px;
+}
+.lib-brand__logo {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, var(--accent), #7c4dff);
+  box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.15);
+  position: relative;
+}
+.lib-brand__logo::after {
+  content: '';
+  position: absolute;
+  right: 6px;
+  bottom: 6px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--laser);
+  box-shadow: 0 0 6px 2px rgba(255, 40, 40, 0.7);
+}
+.lib-side__title {
+  margin: 16px 8px 4px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+}
+.lib-courses {
+  flex: 1;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.lib-side__empty {
+  padding: 4px 8px;
+}
+.lib-side__add,
+.lib-side__settings {
+  justify-content: center;
+  min-height: 44px;
+}
+.lib-side__settings {
+  margin-top: 6px;
+  background: transparent;
+}
+.lib-nav {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 44px;
+  padding: 8px 10px;
+  font: inherit;
+  font-size: 14px;
+  color: var(--text-primary);
+  text-align: left;
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.lib-nav:hover {
+  background: var(--bg-hover);
+}
+.lib-nav--active {
+  background: var(--bg-active);
+}
+.lib-nav__name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.lib-nav__count {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex: none;
+}
+.dot--lg {
+  width: 16px;
+  height: 16px;
+}
+
+.lib-main {
+  min-height: 0;
+  overflow: auto;
+  padding: 28px 36px 40px;
+}
+.lib-main > div {
+  max-width: 1100px;
+  margin: 0 auto;
+}
+.lib-banner {
+  max-width: 1100px;
+  margin: 0 auto 16px;
+  border-radius: 10px;
+  border: none;
+}
+.lib-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+.lib-head h1 {
+  margin: 0;
+  font-size: 26px;
+  font-weight: 650;
+  flex: 0 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.lib-section-title {
+  margin: 28px 0 10px;
+  font-size: 13px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+}
+
+.resume-card {
+  position: relative;
+  padding: 24px 28px;
+  border-radius: 16px;
+  background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 30%, var(--bg-panel)), var(--bg-panel) 70%);
+  border: 1px solid color-mix(in srgb, var(--accent) 40%, var(--border));
+  cursor: pointer;
+}
+.resume-card:hover {
+  border-color: var(--accent);
+}
+.resume-card__label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent-hover);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.resume-card__name {
+  margin: 6px 0 4px;
+  font-size: 24px;
+  font-weight: 650;
+  padding-right: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.resume-card__meta {
+  color: var(--text-secondary);
+  margin-bottom: 14px;
+}
+.resume-card__btn {
+  position: absolute;
+  right: 28px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+.lib-empty {
+  padding: 32px;
+  border-radius: 16px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+}
+.lib-empty h2 {
+  margin: 0 0 8px;
+  font-size: 20px;
+}
+.lib-empty p {
+  color: var(--text-secondary);
+  line-height: 1.5;
+  max-width: 640px;
+}
+.lib-empty__actions {
+  display: flex;
+  gap: 10px;
+  margin: 18px 0 10px;
+}
+
+.folder-chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: -6px 0 16px;
+  padding: 6px 6px 6px 14px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  border-radius: 10px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+}
+.folder-chip span {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.folder-chip strong {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+.folder-chip--missing {
+  border-color: var(--warn);
+  color: var(--warn);
+}
+
+.file-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.file-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-height: 64px;
+  padding: 10px 12px 10px 16px;
+  border-radius: 12px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  cursor: pointer;
+}
+.file-row:hover {
+  border-color: var(--border-strong);
+  background: color-mix(in srgb, var(--bg-panel) 85%, white 3%);
+}
+.file-row--missing {
+  opacity: 0.55;
+  cursor: default;
+}
+.file-row__index {
+  width: 24px;
+  text-align: right;
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+  font-size: 13px;
+}
+.file-row__main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.file-row__name {
+  font-size: 15px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.file-row__meta {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+.file-row__actions {
+  display: flex;
+  gap: 2px;
+}
+.file-row__actions .icon-btn {
+  height: 40px;
+  min-width: 40px;
+}
+.file-row__actions .icon-btn:disabled {
+  opacity: 0.3;
+}
+.mini-progress {
+  height: 3px;
+  margin-top: 4px;
+  border-radius: 2px;
+  background: var(--bg-active);
+  overflow: hidden;
+  max-width: 320px;
+}
+.mini-progress > div {
+  height: 100%;
+  background: var(--accent);
+}
+.status {
+  font-size: 12px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  white-space: nowrap;
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+}
+.status--ready {
+  color: #66bb6a;
+}
+.status--preparing,
+.status--pending {
+  color: var(--accent-hover);
+}
+.status--missing {
+  color: var(--warn);
+}
+.status--error {
+  color: var(--danger);
+  cursor: pointer;
+}
+.lib-drop {
+  padding: 48px;
+  text-align: center;
+  line-height: 1.8;
+  border-radius: 14px;
+  border: 2px dashed var(--border-strong);
+  color: var(--text-secondary);
+}
+.lib-course__footer {
+  margin-top: 28px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* Form alanları */
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 16px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+.input {
+  font: inherit;
+  font-size: 15px;
+  color: var(--text-primary);
+  background: var(--bg-app);
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  padding: 10px 12px;
+  outline: none;
+  user-select: text;
+}
+.input:focus {
+  border-color: var(--accent);
+}
+.color-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.opening__name {
+  font-weight: 600;
+  color: var(--text-primary) !important;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---------- Ara modu ---------- */
+.banner--break {
+  background: color-mix(in srgb, var(--accent) 22%, var(--bg-panel));
+}
+.break-count {
+  font-family: var(--font-mono);
+  font-size: 20px;
+  font-weight: 600;
+}
+.break-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2vh;
+  color: #fff;
+  background: radial-gradient(circle at 50% 40%, #1d2a4a, #0b0f1a 70%);
+  font-family: var(--font-ui);
+}
+.break-screen__title {
+  font-size: 7vh;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  opacity: 0.85;
+}
+.break-screen__count {
+  font-family: var(--font-mono);
+  font-size: 22vh;
+  font-weight: 600;
+  line-height: 1;
+}
+.break-screen__back {
+  font-size: 4vh;
+  opacity: 0.7;
+}
