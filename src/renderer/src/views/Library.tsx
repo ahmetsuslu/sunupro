@@ -5,6 +5,20 @@ import ConfirmDialog from '../components/ConfirmDialog'
 import { timeAgo } from '../lib/time'
 import { useDragReorder } from '../lib/use-drag-reorder'
 import UpdateBanner from '../components/UpdateBanner'
+import TimetableView from '../components/TimetableView'
+import { DAY_NAMES, DAY_SHORT, isoDay } from '@shared/timetable'
+import {
+  courseColor,
+  courseSlots,
+  levelName,
+  nextDayEntry,
+  nextPresentation,
+  sidebarGroups,
+  slotTime,
+  todayEntries,
+  useNow,
+  type TodayEntry
+} from '../lib/schedule'
 
 type Props = {
   onOpen: (path: string) => void
@@ -32,8 +46,18 @@ const STATUS_LABEL: Record<LibraryFile['status'], string> = {
 export default function Library({ onOpen, onSettings, error, onDismissError }: Props): React.JSX.Element {
   const [view, setView] = useState<LibraryView | null>(null)
   const [selected, setSelected] = useState<string | null>(null) // null → ana sayfa
+  const [timetableOpen, setTimetableOpen] = useState(false)
   const [dialog, setDialog] = useState<Dialog>(null)
   const [dragging, setDragging] = useState(false)
+  const now = useNow()
+  const openCourse = (id: string | null): void => {
+    setSelected(id)
+    setTimetableOpen(false)
+  }
+  const openTimetable = (): void => {
+    setSelected(null)
+    setTimetableOpen(true)
+  }
 
   useEffect(() => {
     window.api.library.get().then(setView)
@@ -102,22 +126,39 @@ export default function Library({ onOpen, onSettings, error, onDismissError }: P
           <span className="lib-brand__logo" />
           Sunu Pro
         </div>
-        <button className={`lib-nav ${selected === null ? 'lib-nav--active' : ''}`} onClick={() => setSelected(null)}>
+        <button
+          className={`lib-nav ${selected === null && !timetableOpen ? 'lib-nav--active' : ''}`}
+          onClick={() => openCourse(null)}
+        >
           Ana sayfa
         </button>
-        <div className="lib-side__title">Dersler</div>
+        <button className={`lib-nav ${timetableOpen ? 'lib-nav--active' : ''}`} onClick={openTimetable}>
+          Ders programı
+        </button>
         <div className="lib-courses">
-          {view?.courses.map((c) => (
-            <button
-              key={c.id}
-              className={`lib-nav ${selected === c.id ? 'lib-nav--active' : ''}`}
-              onClick={() => setSelected(c.id)}
-            >
-              <span className="dot" style={{ background: c.color }} />
-              <span className="lib-nav__name">{c.name}</span>
-              <span className="lib-nav__count">{c.items.length}</span>
-            </button>
-          ))}
+          {view &&
+            sidebarGroups(view, now).map((g) => (
+              <React.Fragment key={g.title}>
+                <div className={`lib-side__title ${g.today ? 'lib-side__title--today' : ''}`}>
+                  {g.title}
+                  {g.today && <span> · bugün</span>}
+                </div>
+                {g.entries.map(({ key, course: c, sub }) => (
+                  <button
+                    key={key}
+                    className={`lib-nav ${selected === c.id ? 'lib-nav--active' : ''}`}
+                    onClick={() => openCourse(c.id)}
+                  >
+                    <span className="dot" style={{ background: courseColor(c, view.timetable) }} />
+                    <span className="lib-nav__name">
+                      {c.name}
+                      {sub && <small>{sub}</small>}
+                    </span>
+                    <span className="lib-nav__count">{c.items.length}</span>
+                  </button>
+                ))}
+              </React.Fragment>
+            ))}
           {view && !view.courses.length && <div className="hint lib-side__empty">Henüz ders yok.</div>}
         </div>
         <button className="btn lib-side__add" onClick={() => setDialog({ kind: 'create' })}>
@@ -140,7 +181,9 @@ export default function Library({ onOpen, onSettings, error, onDismissError }: P
           </div>
         )}
 
-        {!course && (
+        {timetableOpen && view && <TimetableView view={view} setView={setView} onOpenCourse={(id) => openCourse(id)} />}
+
+        {!course && !timetableOpen && (
           <div className="lib-home">
             <div className="lib-head">
               <h1>Merhaba</h1>
@@ -149,6 +192,8 @@ export default function Library({ onOpen, onSettings, error, onDismissError }: P
                 Sunu aç…
               </button>
             </div>
+
+            {view && <TodayPanel view={view} now={now} onOpen={onOpen} onCourse={(id) => openCourse(id)} />}
 
             {resume ? (
               <section className="resume-card" onClick={() => onOpen(resume.path)}>
@@ -213,7 +258,7 @@ export default function Library({ onOpen, onSettings, error, onDismissError }: P
         {course && (
           <div className="lib-course">
             <div className="lib-head">
-              <span className="dot dot--lg" style={{ background: course.color }} />
+              <span className="dot dot--lg" style={{ background: view ? courseColor(course, view.timetable) : course.color }} />
               <h1>{course.name}</h1>
               <button className="icon-btn" title="Dersi düzenle" onClick={() => setDialog({ kind: 'edit', course })}>
                 ✎
@@ -231,6 +276,8 @@ export default function Library({ onOpen, onSettings, error, onDismissError }: P
                 {course.folder ? 'Klasörü değiştir' : 'Klasör bağla'}
               </button>
             </div>
+
+            {view && <CourseMeta view={view} course={course} onEdit={openTimetable} />}
 
             {course.folder && (
               <div className={`folder-chip ${course.folderMissing ? 'folder-chip--missing' : ''}`}>
@@ -317,12 +364,15 @@ export default function Library({ onOpen, onSettings, error, onDismissError }: P
         <CourseDialog
           title="Yeni ders"
           confirmLabel="Oluştur"
+          levels={view?.timetable.levels ?? []}
           onCancel={() => setDialog(null)}
-          onSave={async (name, color) => {
+          onSave={async (name, color, levelId) => {
             setDialog(null)
-            const v = await window.api.library.createCourse(name, color)
+            let v = await window.api.library.createCourse(name, color)
+            const id = v.courses[v.courses.length - 1]?.id ?? null
+            if (id && levelId) v = await window.api.library.updateCourse(id, { levelId })
             setView(v)
-            setSelected(v.courses[v.courses.length - 1]?.id ?? null)
+            openCourse(id)
           }}
         />
       )}
@@ -331,11 +381,13 @@ export default function Library({ onOpen, onSettings, error, onDismissError }: P
           title="Dersi düzenle"
           initialName={dialog.course.name}
           initialColor={dialog.course.color}
+          initialLevelId={dialog.course.levelId ?? null}
+          levels={view?.timetable.levels ?? []}
           confirmLabel="Kaydet"
           onCancel={() => setDialog(null)}
-          onSave={async (name, color) => {
+          onSave={async (name, color, levelId) => {
             setDialog(null)
-            setView(await window.api.library.updateCourse(dialog.course.id, { name, color }))
+            setView(await window.api.library.updateCourse(dialog.course.id, { name, color, levelId }))
           }}
         />
       )}
@@ -352,6 +404,149 @@ export default function Library({ onOpen, onSettings, error, onDismissError }: P
           }}
         />
       )}
+    </div>
+  )
+}
+
+/**
+ * Ana sayfa "Bugün": bugünün dersleri saat sırasıyla, her birinde dersin sıradaki sunusu. Bugün kalan ders
+ * yoksa sonraki ders gösterilir. Programda hiç ders yoksa görünmez.
+ */
+function TodayPanel({
+  view,
+  now,
+  onOpen,
+  onCourse
+}: {
+  view: LibraryView
+  now: Date
+  onOpen: (path: string) => void
+  onCourse: (id: string) => void
+}): React.JSX.Element | null {
+  if (!view.timetable.slots.length) return null
+  const today = todayEntries(view, now)
+  const next = today.some((e) => e.state !== 'past') ? null : nextDayEntry(view, now)
+  const nextFile = next && nextPresentation(next.course)
+  return (
+    <section className="today">
+      <div className="today__head">
+        <h2>Bugün · {DAY_NAMES[isoDay(now)]}</h2>
+        <span className="hint">{now.toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' })}</span>
+      </div>
+      {today.length ? (
+        <div className="today__list">
+          {today.map((e) => (
+            <TodayCard key={e.slot.id} entry={e} view={view} onOpen={onOpen} onCourse={onCourse} />
+          ))}
+        </div>
+      ) : (
+        <div className="today__empty">Bugün ders yok.</div>
+      )}
+      {next && (
+        <div className="today__next" role="button" onClick={() => onCourse(next.course.id)}>
+          <span>
+            Sıradaki ders: <strong>{next.dayName} {next.start}</strong> · {next.course.name}
+            {nextFile && <span className="hint"> — {stripExt(nextFile.name)}</span>}
+          </span>
+          {nextFile && (
+            <button
+              className="btn"
+              onClick={(ev) => {
+                ev.stopPropagation()
+                onOpen(nextFile.path)
+              }}
+            >
+              ▶ Aç
+            </button>
+          )}
+        </div>
+      )}
+    </section>
+  )
+}
+
+const stripExt = (name: string): string => name.replace(/\.(pptx|pptm|ppsx|ppsm|ppt|pps)$/i, '')
+
+function TodayCard({
+  entry,
+  view,
+  onOpen,
+  onCourse
+}: {
+  entry: TodayEntry
+  view: LibraryView
+  onOpen: (path: string) => void
+  onCourse: (id: string) => void
+}): React.JSX.Element {
+  const { course, slot, state, start, end } = entry
+  const file = nextPresentation(course)
+  const level = levelName(course, view.timetable)
+  const active = state === 'now' || state === 'next'
+  return (
+    <div
+      className={`today-card today-card--${state}`}
+      style={{ ['--c' as string]: courseColor(course, view.timetable) }}
+      role="button"
+      onClick={() => onCourse(course.id)}
+    >
+      <div className="today-card__time">
+        <strong>{start}</strong>
+        <span>{end}</span>
+      </div>
+      <div className="today-card__main">
+        <div className="today-card__tags">
+          {state === 'now' && <span className="tag tag--now">Şu an</span>}
+          {state === 'next' && <span className="tag tag--next">Sıradaki</span>}
+          {level && <span className="tag tag--level">{level}</span>}
+          {slot.room && <span className="tag">{slot.room}</span>}
+        </div>
+        <div className="today-card__course">{course.name}</div>
+        <div className="today-card__file">
+          {file ? (
+            <>
+              Sunu: <strong>{stripExt(file.name)}</strong>
+            </>
+          ) : course.items.length ? (
+            'Tüm sunular sunuldu'
+          ) : (
+            'Bu derste henüz sunu yok'
+          )}
+        </div>
+      </div>
+      {file && (
+        <button
+          className={`btn btn--lg ${active ? 'btn--primary' : ''}`}
+          onClick={(ev) => {
+            ev.stopPropagation()
+            onOpen(file.path)
+          }}
+        >
+          ▶ Başlat
+        </button>
+      )}
+    </div>
+  )
+}
+
+/** Ders sayfası: sınıf rozeti ve haftalık saatleri */
+function CourseMeta({ view, course, onEdit }: { view: LibraryView; course: LibraryCourse; onEdit: () => void }): React.JSX.Element {
+  const level = levelName(course, view.timetable)
+  const slots = courseSlots(view, course.id)
+  return (
+    <div className="course-meta" style={{ ['--c' as string]: courseColor(course, view.timetable) }}>
+      {level && <span className="tag tag--level">{level}</span>}
+      {slots.map((s) => {
+        const t = slotTime(view.timetable, s)
+        return (
+          <span key={s.id} className="tag">
+            {DAY_SHORT[s.day]} {t.start}–{t.end}
+            {s.room ? ` · ${s.room}` : ''}
+          </span>
+        )
+      })}
+      <button className="link-btn" onClick={onEdit}>
+        {slots.length ? 'Programı düzenle' : 'Programa ekle'}
+      </button>
     </div>
   )
 }

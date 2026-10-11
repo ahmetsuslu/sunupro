@@ -44,6 +44,27 @@ export type Course = {
   /** Sıralı dosya yolları */
   files: string[]
   createdAt: number
+  /** Sınıfı (Timetable.levels); varsa dersin rengi sınıfın rengidir */
+  levelId?: string | null
+}
+
+/** Ders saati (okulun zil saatleri), ör. 08:30–09:20 */
+export type Period = { start: string; end: string }
+
+/** Sınıf / dönem: ad ve renk kullanıcı tanımlı (ör. "1. sınıf" yeşil, "Dönem 3" mor) */
+export type ClassLevel = { id: string; name: string; color: string }
+
+/** Haftalık programda bir ders: gün (1 = Pazartesi … 7 = Pazar), ders saatleri from–to (0'dan, dahil) */
+export type ScheduleSlot = { id: string; courseId: string; day: number; from: number; to: number; room: string }
+
+export type Timetable = {
+  /** ör. 2026-2027 Güz */
+  title: string
+  /** Programda gösterilen günler (1 = Pazartesi … 7 = Pazar) */
+  days: number[]
+  periods: Period[]
+  levels: ClassLevel[]
+  slots: ScheduleSlot[]
 }
 
 export type FileStatus = 'ready' | 'pending' | 'preparing' | 'missing' | 'error'
@@ -71,6 +92,8 @@ export type LibraryView = {
   courses: LibraryCourse[]
   /** Son açılanlar (yeniden eskiye) */
   recent: (LibraryFile & { courseId: string | null; courseName: string | null })[]
+  /** Haftalık ders programı */
+  timetable: Timetable
 }
 
 /** PowerPoint SlideShowView.State */

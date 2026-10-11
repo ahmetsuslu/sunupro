@@ -5,7 +5,8 @@ import { basename, dirname, join } from 'path'
 import { JsonFile } from './json-file'
 import { forgetRecent, getSession, loadInk, presentedAt, recentFiles, saveInk, setPresented } from './sessions'
 import { friendlyError, isPrepared, show } from './show'
-import type { Course, FileStatus, InkMap, LibraryCourse, LibraryFile, LibraryView } from '../shared/types'
+import type { Course, FileStatus, InkMap, LibraryCourse, LibraryFile, LibraryView, Timetable } from '../shared/types'
+import { defaultTimetable, sanitizeTimetable } from '../shared/timetable'
 
 const PPT_FILE = /\.(pptx|pptm|ppsx|ppsm|ppt|pps)$/i
 // Office'in açık belgeler için bıraktığı kilit dosyaları (~$ad.pptx)
@@ -14,14 +15,38 @@ const isLockFile = (name: string): boolean => name.startsWith('~$')
 const sameFile = (a: string, b: string): boolean => a.toLowerCase() === b.toLowerCase()
 const collator = new Intl.Collator('tr', { numeric: true, sensitivity: 'base' })
 
-const store = new JsonFile<{ courses: Course[] }>('library.json', () => ({ courses: [] }))
+type LibraryData = { courses: Course[]; timetable?: Timetable }
+
+const store = new JsonFile<LibraryData>('library.json', () => ({ courses: [] }))
 
 function courses(): Course[] {
   return store.get().courses
 }
 
+/** Haftalık program (eski kayıtlarda yoksa varsayılan); silinmiş derslerin saatleri ayıklanır */
+function timetable(): Timetable {
+  const data = store.get()
+  if (!data.timetable) store.set({ ...data, timetable: defaultTimetable(randomUUID) })
+  const t = store.get().timetable!
+  return sanitizeTimetable(t, courses().map((c) => c.id), t)
+}
+
 function saveCourses(list: Course[]): void {
-  store.set({ courses: list })
+  const data = store.get()
+  // Silinen dersin program saatleri ve artık olmayan sınıflar temizlenir
+  const levelIds = new Set((data.timetable?.levels ?? []).map((l) => l.id))
+  const clean = list.map((c) => (c.levelId && !levelIds.has(c.levelId) ? { ...c, levelId: null } : c))
+  const timetable = data.timetable && { ...data.timetable, slots: data.timetable.slots.filter((s) => clean.some((c) => c.id === s.courseId)) }
+  store.set({ ...data, courses: clean, timetable })
+}
+
+function saveTimetable(next: Partial<Timetable>): void {
+  const current = timetable()
+  const t = sanitizeTimetable({ ...current, ...next }, courses().map((c) => c.id), current)
+  const levelIds = new Set(t.levels.map((l) => l.id))
+  // Silinen sınıfa bağlı derslerin sınıfı boşalır
+  const list = courses().map((c) => (c.levelId && !levelIds.has(c.levelId) ? { ...c, levelId: null } : c))
+  store.set({ ...store.get(), courses: list, timetable: t })
 }
 
 function updateCourse(id: string, fn: (c: Course) => Course): void {
@@ -130,6 +155,7 @@ export function libraryView(): LibraryView {
   if (synced.some((c, i) => c !== courses()[i])) saveCourses(synced)
   const list: LibraryCourse[] = synced.map(({ files, ...c }) => ({
     ...c,
+    levelId: c.levelId ?? null,
     folderMissing: !!c.folder && !existsSync(c.folder),
     items: files.map((f) => toFile(f, !!c.folder && sameFile(dirname(f), c.folder)))
   }))
@@ -139,7 +165,7 @@ export function libraryView(): LibraryView {
       const course = list.find((c) => c.items.some((i) => sameFile(i.path, p)))
       return { ...toFile(p, false), courseId: course?.id ?? null, courseName: course?.name ?? null }
     })
-  return { courses: list, recent }
+  return { courses: list, recent, timetable: timetable() }
 }
 
 function allFiles(): string[] {
@@ -179,12 +205,26 @@ export function registerLibrary(getMain: () => BrowserWindow | null): void {
   ipcMain.handle('library:get', () => view())
 
   ipcMain.handle('library:create-course', (_e, name: string, color: string) => {
-    saveCourses([...courses(), { id: randomUUID(), name: name.trim() || 'Yeni ders', color, folder: null, files: [], createdAt: Date.now() }])
+    saveCourses([
+      ...courses(),
+      { id: randomUUID(), name: name.trim() || 'Yeni ders', color, folder: null, files: [], createdAt: Date.now(), levelId: null }
+    ])
     return view()
   })
 
-  ipcMain.handle('library:update-course', (_e, id: string, patch: { name?: string; color?: string }) => {
-    updateCourse(id, (c) => ({ ...c, ...(patch.name != null ? { name: patch.name.trim() || c.name } : {}), ...(patch.color ? { color: patch.color } : {}) }))
+  ipcMain.handle('library:update-course', (_e, id: string, patch: { name?: string; color?: string; levelId?: string | null }) => {
+    updateCourse(id, (c) => ({
+      ...c,
+      ...(patch.name != null ? { name: patch.name.trim() || c.name } : {}),
+      ...(patch.color ? { color: patch.color } : {}),
+      ...(patch.levelId !== undefined ? { levelId: patch.levelId } : {})
+    }))
+    return view()
+  })
+
+  // Haftalık program: başlık, günler, ders saatleri, sınıflar ve ders saatleri (yalnızca verilen alanlar değişir)
+  ipcMain.handle('library:set-timetable', (_e, patch: Partial<Timetable>) => {
+    saveTimetable(patch)
     return view()
   })
 

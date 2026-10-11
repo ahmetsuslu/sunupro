@@ -573,6 +573,80 @@ Start-Sleep -Milliseconds 150; [void][M]::SetCursorPos($old.X, $old.Y)`
     await sleep(500)
     check('parmakla sürükle → Hafta 10 yeniden en altta', (await order()) === 'ornek-sunu|Hafta 1|Hafta 2|Hafta 10' && !show.presentation, await order())
 
+    // Ders programı: boş hücreye tıkla → Pazartesi 3.–4. saat, C201, 2. sınıf
+    type Tt = { timetable: { slots: { day: number; from: number; to: number; room: string }[]; levels: { id: string; name: string; color: string }[] } }
+    await clickButton('Ders programı')
+    await sleep(400)
+    check('Ders programı ekranı açıldı', await js<boolean>(`!!document.querySelector('.tt-grid')`))
+    await js(`document.querySelector('.tt-row[data-day="1"]').querySelectorAll('.tt-cell')[2].click()`)
+    await sleep(300)
+    await js(`(() => {
+      const field = (label) => [...document.querySelectorAll('.slot-dialog .field')].find((f) => f.querySelector('span').textContent === label)
+      const setVal = (el, v) => {
+        const proto = el instanceof HTMLSelectElement ? HTMLSelectElement.prototype : HTMLInputElement.prototype
+        Object.getOwnPropertyDescriptor(proto, 'value').set.call(el, v)
+        el.dispatchEvent(new Event(el instanceof HTMLSelectElement ? 'change' : 'input', { bubbles: true }))
+      }
+      setVal(field('Bitiş').querySelector('select'), '3')
+      setVal(field('Derslik').querySelector('input'), 'C201')
+      ;[...document.querySelectorAll('.slot-dialog .chip')].find((b) => b.textContent.includes('2. sınıf')).click()
+      return true
+    })()`)
+    await sleep(200)
+    await js(`document.querySelector('.slot-dialog button[type=submit]').click()`)
+    await sleep(600)
+    const tt = await js<View & Tt>(`window.api.library.get()`)
+    const lvl2 = tt.timetable.levels.find((l) => l.name === '2. sınıf')
+    const slot0 = tt.timetable.slots[0]
+    check(
+      'programa ders yerleşti (Pzt 3.–4. saat, C201, 2. sınıf)',
+      tt.timetable.slots.length === 1 && slot0.day === 1 && slot0.from === 2 && slot0.to === 3 && slot0.room === 'C201' &&
+        (tt.courses[0] as { levelId?: string }).levelId === lvl2?.id,
+      { slots: tt.timetable.slots, levelId: (tt.courses[0] as { levelId?: string }).levelId, lvl2 }
+    )
+    const slotColor = await js<string>(`getComputedStyle(document.querySelector('.tt-slot')).getPropertyValue('--c').trim()`)
+    check('programdaki ders sınıfının renginde', slotColor === lvl2?.color, { slotColor, level: lvl2?.color })
+    await shot('t1-ders-programi', 'presenter')
+    // Program ayarları: "Ön lisans" şablonu 4 sınıfı 2'ye indirir, dersin 2. sınıf bağı (kimliği) korunur
+    await clickButton('Program ayarları')
+    await sleep(300)
+    await clickButton('Ön lisans (2 yıl)')
+    await sleep(500)
+    const tt2 = await js<View & Tt>(`window.api.library.get()`)
+    check(
+      'sınıf şablonu uygulandı, dersin sınıfı korundu',
+      tt2.timetable.levels.map((l) => l.name).join('|') === '1. sınıf|2. sınıf' && (tt2.courses[0] as { levelId?: string }).levelId === lvl2?.id,
+      tt2.timetable.levels
+    )
+    await shot('t1b-program-ayarlari', 'presenter')
+
+    // Bugün: saati Pazartesi 11:00'e sabitle → ders "Şu an", sıradaki sunu Hafta 2; sol menüde Pazartesi · bugün
+    const setNow = (expr: string): Promise<unknown> => js(`window.__sunuNow = ${expr}; window.dispatchEvent(new Event('sunu:now')); true`)
+    await setNow('new Date(2026, 9, 12, 11, 0).getTime()')
+    await clickButton('Ana sayfa')
+    await sleep(400)
+    const today = await js<{ card?: string; file?: string; side?: string; sub?: string }>(`({
+      card: document.querySelector('.today-card--now .today-card__course')?.textContent,
+      file: document.querySelector('.today-card--now .today-card__file')?.textContent,
+      side: document.querySelector('.lib-side__title--today')?.textContent,
+      sub: document.querySelector('.lib-nav__name small')?.textContent
+    })`)
+    check(
+      'Bugün: ders "Şu an", sıradaki sunu Hafta 2; menüde Pazartesi · bugün',
+      today.card === 'Test Dersi' && !!today.file?.includes('Hafta 2') && today.side === 'Pazartesi · bugün' && today.sub === '10:30 · C201',
+      today
+    )
+    await shot('t2-bugun', 'presenter')
+    await setNow('new Date(2026, 9, 11, 15, 0).getTime()') // Pazar
+    await sleep(300)
+    const sunday = await js<{ empty: boolean; next?: string }>(
+      `({ empty: !!document.querySelector('.today__empty'), next: document.querySelector('.today__next')?.textContent })`
+    )
+    check('hafta sonu: bugün ders yok, sıradaki "Yarın 10:30"', sunday.empty && !!sunday.next?.includes('Yarın 10:30'), sunday)
+    await setNow('undefined')
+    await clickButton('Test Dersi')
+    await sleep(400)
+
     await js(`[...document.querySelectorAll('.file-row')].find((r) => r.textContent.includes('ornek-sunu')).click()`)
     await waitFor(() => show.presentation?.name === 'ornek-sunu.pptx', 15000)
     await sleep(800)

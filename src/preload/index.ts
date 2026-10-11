@@ -8,7 +8,8 @@ import type {
   Result,
   Settings,
   ShowMode,
-  ShowState
+  ShowState,
+  Timetable
 } from '../shared/types'
 
 type ShowCmd = 'next' | 'prev' | 'goto' | 'screen' | 'state'
@@ -37,8 +38,10 @@ const api = {
     get: (): Promise<LibraryView> => ipcRenderer.invoke('library:get'),
     createCourse: (name: string, color: string): Promise<LibraryView> =>
       ipcRenderer.invoke('library:create-course', name, color),
-    updateCourse: (id: string, patch: { name?: string; color?: string }): Promise<LibraryView> =>
+    updateCourse: (id: string, patch: { name?: string; color?: string; levelId?: string | null }): Promise<LibraryView> =>
       ipcRenderer.invoke('library:update-course', id, patch),
+    /** Haftalık program: yalnızca verilen alanlar değişir */
+    setTimetable: (patch: Partial<Timetable>): Promise<LibraryView> => ipcRenderer.invoke('library:set-timetable', patch),
     deleteCourse: (id: string): Promise<LibraryView> => ipcRenderer.invoke('library:delete-course', id),
     /** paths verilmezse dosya seçme penceresi açılır */
     addFiles: (id: string, paths?: string[]): Promise<LibraryView> => ipcRenderer.invoke('library:add-files', id, paths),
