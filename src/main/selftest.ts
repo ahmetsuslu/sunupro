@@ -1,11 +1,12 @@
 import { app, BrowserWindow, desktopCapturer, screen, type Display } from 'electron'
 import { execFileSync } from 'child_process'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs'
-import { join } from 'path'
+import { dirname, join } from 'path'
 import { cpus } from 'os'
 import { ppt } from './pptctl'
 import { cacheRoot, friendlyError, show } from './show'
 import { physicalCenter } from './displays'
+import { libraryView } from './library'
 import { loadSettings, saveSettings } from './store'
 
 /**
@@ -602,6 +603,38 @@ Start-Sleep -Milliseconds 150; [void][M]::SetCursorPos($old.X, $old.Y)`
     await touch('touchEnd', [])
     await sleep(500)
     check('parmakla sürükle → Hafta 10 yeniden en altta', (await order()) === 'ornek-sunu|Hafta 1|Hafta 2|Hafta 10' && !show.presentation, await order())
+
+    // Klasör izleme: bağlı klasöre yeni sunu eklenince liste yenilemeden kendiliğinden güncellenir
+    const rowVisible = (name: string): Promise<boolean> =>
+      js(`[...document.querySelectorAll('.file-row__name')].some((n) => n.textContent === ${JSON.stringify(name)})`)
+    writeFileSync(join(folder, 'Hafta 11.pptx'), readFileSync(sample))
+    let appeared = false
+    for (let i = 0; i < 24 && !appeared; i++) {
+      await sleep(250)
+      appeared = await rowVisible('Hafta 11')
+    }
+    check('bağlı klasöre eklenen sunu listede kendiliğinden göründü', appeared)
+
+    // Klasörü bağlı olmayan, sunuları tek klasörde olan ders: "Klasörü bağla" önerisi → tek tıkla bağlanır
+    const vS = await js<View>(`window.api.library.createCourse('Klasörsüz Ders', '#ff9800')`)
+    const loneId = vS.courses[vS.courses.length - 1].id
+    await js(`window.api.library.addFiles(${JSON.stringify(loneId)}, ${JSON.stringify([sample])})`)
+    main.webContents.send('library:changed', libraryView()) // arayüz dışından eklendi: menüyü yenile
+    await sleep(300)
+    await clickButton('Klasörsüz Ders')
+    await sleep(400)
+    const hasSuggest = await js<boolean>(`!!document.querySelector('.folder-chip--suggest')`)
+    await clickButton('Klasörü bağla')
+    await sleep(500)
+    const lone = (await js<{ courses: { id: string; folder: string | null }[] }>(`window.api.library.get()`)).courses.find((c) => c.id === loneId)
+    check(
+      'klasörsüz derste "Klasörü bağla" önerisi, tek tıkla bağlandı',
+      hasSuggest && lone?.folder?.toLowerCase() === dirname(sample).toLowerCase() && !(await js<boolean>(`!!document.querySelector('.folder-chip--suggest')`)),
+      { hasSuggest, folder: lone?.folder }
+    )
+    await js(`window.api.library.deleteCourse(${JSON.stringify(loneId)})`)
+    await clickButton('Test Dersi')
+    await sleep(400)
 
     // Ders programı: boş hücreye tıkla → Pazartesi 3.–4. saat, C201, 2. sınıf
     type Tt = { timetable: { slots: { day: number; from: number; to: number; room: string }[]; levels: { id: string; name: string; color: string }[] } }

@@ -191,6 +191,12 @@
   border-color: var(--warn);
   color: var(--warn);
 }
+.folder-chip--suggest {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+}
+.folder-chip--suggest span {
+  white-space: normal;
+}
 
 .file-list {
   display: flex;

@@ -47,7 +47,8 @@ const api = {
     deleteCourse: (id: string): Promise<LibraryView> => ipcRenderer.invoke('library:delete-course', id),
     /** paths verilmezse dosya seçme penceresi açılır */
     addFiles: (id: string, paths?: string[]): Promise<LibraryView> => ipcRenderer.invoke('library:add-files', id, paths),
-    linkFolder: (id: string): Promise<LibraryView> => ipcRenderer.invoke('library:link-folder', id),
+    /** folder verilmezse klasör seçme penceresi açılır */
+    linkFolder: (id: string, folder?: string): Promise<LibraryView> => ipcRenderer.invoke('library:link-folder', id, folder),
     unlinkFolder: (id: string): Promise<LibraryView> => ipcRenderer.invoke('library:unlink-folder', id),
     removeFile: (id: string, path: string): Promise<LibraryView> => ipcRenderer.invoke('library:remove-file', id, path),
     moveFile: (id: string, path: string, delta: number): Promise<LibraryView> =>

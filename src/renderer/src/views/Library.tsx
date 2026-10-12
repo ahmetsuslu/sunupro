@@ -95,6 +95,9 @@ export default function Library({ onOpen, onSettings, error, onDismissError }: P
   // Derste sıradaki sunu: sunulmamış ilk dosya
   const nextPath = course?.items.find((f) => !f.presentedAt && f.status !== 'missing')?.path ?? null
   const doneCount = course?.items.filter((f) => f.presentedAt).length ?? 0
+  const dirOf = (p: string): string => p.slice(0, Math.max(p.lastIndexOf('\\'), p.lastIndexOf('/')))
+  const courseDirs = new Set(course?.items.map((f) => dirOf(f.path).toLowerCase()) ?? [])
+  const suggestFolder = course && !course.folder && course.items.length && courseDirs.size === 1 ? dirOf(course.items[0].path) : null
 
   // Tutamaçtan sürükleyerek sıralama: yeni sıra hemen gösterilir, kayıt ardından gelir
   const reorder = useDragReorder(course?.items.length ?? 0, (from, to) => {
@@ -255,6 +258,19 @@ export default function Library({ onOpen, onSettings, error, onDismissError }: P
             </div>
 
             {view && <CourseMeta view={view} course={course} onEdit={openTimetable} />}
+
+            {/* Klasör bağlı değil ama sunuların hepsi aynı klasörde: bağlanırsa yeni sunular kendiliğinden gelir */}
+            {suggestFolder && (
+              <div className="folder-chip folder-chip--suggest">
+                <span>
+                  Bu dersin sunuları <strong>{suggestFolder.split(/[\\/]/).pop()}</strong> klasöründe. Klasörü bağlarsan
+                  klasöre eklenen yeni sunular burada kendiliğinden görünür.
+                </span>
+                <button className="btn" onClick={async () => setView(await window.api.library.linkFolder(course.id, suggestFolder))}>
+                  Klasörü bağla
+                </button>
+              </div>
+            )}
 
             {course.folder && (
               <div className={`folder-chip ${course.folderMissing ? 'folder-chip--missing' : ''}`}>

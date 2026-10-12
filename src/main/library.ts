@@ -1,6 +1,6 @@
-import { BrowserWindow, dialog, ipcMain } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain } from 'electron'
 import { randomUUID } from 'crypto'
-import { existsSync, readdirSync, statSync } from 'fs'
+import { existsSync, readdirSync, statSync, watch, type FSWatcher } from 'fs'
 import { basename, dirname, join } from 'path'
 import { JsonFile } from './json-file'
 import { getSession, loadInk, presentedAt, saveInk, setPresented } from './sessions'
@@ -191,9 +191,53 @@ export function registerLibrary(getMain: () => BrowserWindow | null): void {
     afterClose: () => preparer.resume()
   }
 
+  // Bağlı klasörler izlenir: klasöre sunu eklenince/silinince liste kendiliğinden güncellenir. Dosya kopyalanırken
+  // olaylar art arda gelir; sessizlik olunca bir kez taranır (yarım kopyalanmış dosya hazırlanmaya çalışılmasın).
+  const watchers = new Map<string, FSWatcher>()
+  let changeTimer: NodeJS.Timeout | null = null
+  const pushView = (): void => {
+    if (changeTimer) clearTimeout(changeTimer)
+    changeTimer = setTimeout(() => {
+      changeTimer = null
+      getMain()?.webContents.send('library:changed', view())
+    }, 1500)
+  }
+  const syncWatchers = (): void => {
+    const folders = new Map(courses().flatMap((c) => (c.folder ? [[c.folder.toLowerCase(), c.folder] as const] : [])))
+    for (const [key, w] of watchers) {
+      if (!folders.has(key)) {
+        w.close()
+        watchers.delete(key)
+      }
+    }
+    for (const [key, folder] of folders) {
+      if (watchers.has(key) || !existsSync(folder)) continue
+      try {
+        const w = watch(folder, (_event, name) => {
+          const n = name?.toString()
+          if (!n || (PPT_FILE.test(n) && !isLockFile(n))) pushView()
+        })
+        // Klasör kaybolursa (ör. USB çıkarıldı) izleme bırakılır; pencere odaklanınca yeniden denenir
+        w.on('error', () => {
+          w.close()
+          watchers.delete(key)
+        })
+        watchers.set(key, w)
+      } catch {
+        /* erişilemiyor: sonraki taramada yeniden denenir */
+      }
+    }
+  }
+  // Uygulamaya dönülünce de taranır (ağ sürücüsü gibi izlenemeyen klasörler, silinen dosyalar)
+  app.on('browser-window-focus', (_e, win) => {
+    if (win === getMain()) pushView()
+  })
+
   const view = (): LibraryView => {
     preparer.enqueue(allFiles())
-    return libraryView()
+    const v = libraryView()
+    syncWatchers()
+    return v
   }
 
   ipcMain.handle('library:get', () => view())
@@ -248,10 +292,20 @@ export function registerLibrary(getMain: () => BrowserWindow | null): void {
     return view()
   })
 
-  ipcMain.handle('library:link-folder', async (_e, id: string) => {
-    const res = await dialog.showOpenDialog({ title: 'Ders klasörünü seç', properties: ['openDirectory'] })
-    if (res.canceled || !res.filePaths[0]) return view()
-    const folder = res.filePaths[0]
+  // folder verilirse (ör. "sunular bu klasörde, bağla" önerisi) doğrudan bağlanır, yoksa klasör seçtirilir
+  ipcMain.handle('library:link-folder', async (_e, id: string, given?: string) => {
+    let folder = given
+    if (folder) {
+      try {
+        if (!statSync(folder).isDirectory()) return view()
+      } catch {
+        return view()
+      }
+    } else {
+      const res = await dialog.showOpenDialog({ title: 'Ders klasörünü seç', properties: ['openDirectory'] })
+      if (res.canceled || !res.filePaths[0]) return view()
+      folder = res.filePaths[0]
+    }
     updateCourse(id, (c) => syncFolder({ ...c, folder }))
     return view()
   })
