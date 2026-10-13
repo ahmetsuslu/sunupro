@@ -51,6 +51,8 @@ const api = {
     linkFolder: (id: string, folder?: string): Promise<LibraryView> => ipcRenderer.invoke('library:link-folder', id, folder),
     unlinkFolder: (id: string): Promise<LibraryView> => ipcRenderer.invoke('library:unlink-folder', id),
     removeFile: (id: string, path: string): Promise<LibraryView> => ipcRenderer.invoke('library:remove-file', id, path),
+    /** Bağlı klasörde olup listeden çıkarılan sunuları geri getir */
+    restoreExcluded: (id: string): Promise<LibraryView> => ipcRenderer.invoke('library:restore-excluded', id),
     moveFile: (id: string, path: string, delta: number): Promise<LibraryView> =>
       ipcRenderer.invoke('library:move-file', id, path, delta),
     retry: (path: string): Promise<LibraryView> => ipcRenderer.invoke('library:retry', path),

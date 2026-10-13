@@ -53,7 +53,10 @@ function updateCourse(id: string, fn: (c: Course) => Course): void {
   saveCourses(courses().map((c) => (c.id === id ? fn(c) : c)))
 }
 
-/** Bağlı klasörü tarar: yeni sunular sona (doğal sıralı) eklenir, klasörden silinenler çıkarılır. */
+/**
+ * Bağlı klasörü tarar: yeni sunular sona (doğal sıralı) eklenir, klasörden silinenler çıkarılır.
+ * Kullanıcının listeden çıkardığı sunular klasörde durdukça geri eklenmez; klasörden silinince unutulur.
+ */
 function syncFolder(c: Course): Course {
   if (!c.folder || !existsSync(c.folder)) return c
   let names: string[]
@@ -62,11 +65,14 @@ function syncFolder(c: Course): Course {
   } catch {
     return c
   }
-  const inFolder = names.sort(collator.compare).map((n) => join(c.folder!, n))
+  const all = names.sort(collator.compare).map((n) => join(c.folder!, n))
+  const excludedBefore = c.excluded ?? []
+  const excluded = excludedBefore.filter((x) => all.some((p) => sameFile(p, x)))
+  const inFolder = all.filter((p) => !excluded.some((x) => sameFile(x, p)))
   const kept = c.files.filter((f) => !sameFile(dirname(f), c.folder!) || inFolder.some((p) => sameFile(p, f)))
   const added = inFolder.filter((p) => !kept.some((f) => sameFile(f, p)))
-  if (!added.length && kept.length === c.files.length) return c
-  return { ...c, files: [...kept, ...added] }
+  if (!added.length && kept.length === c.files.length && excluded.length === excludedBefore.length) return c
+  return { ...c, files: [...kept, ...added], excluded }
 }
 
 // ---------- Arka planda ön hazırlık ----------
@@ -286,7 +292,9 @@ export function registerLibrary(getMain: () => BrowserWindow | null): void {
       syncFolder({
         ...c,
         folder: folder ?? c.folder,
-        files: [...c.files, ...list.filter((p) => !c.files.some((f) => sameFile(f, p)))]
+        files: [...c.files, ...list.filter((p) => !c.files.some((f) => sameFile(f, p)))],
+        // Elle yeniden eklenen sunu artık "listeden çıkarılmış" sayılmaz
+        excluded: (c.excluded ?? []).filter((x) => !list.some((p) => sameFile(p, x)))
       })
     )
     return view()
@@ -312,12 +320,27 @@ export function registerLibrary(getMain: () => BrowserWindow | null): void {
 
   ipcMain.handle('library:unlink-folder', (_e, id: string) => {
     // Klasörden gelen dosyalar listede kalır, yalnızca otomatik eşitleme durur
-    updateCourse(id, (c) => ({ ...c, folder: null }))
+    updateCourse(id, (c) => ({ ...c, folder: null, excluded: [] }))
     return view()
   })
 
+  // Bağlı klasördeki sunu listeden çıkarılınca hatırlanır, yoksa sonraki taramada geri eklenirdi
   ipcMain.handle('library:remove-file', (_e, id: string, path: string) => {
-    updateCourse(id, (c) => ({ ...c, files: c.files.filter((f) => !sameFile(f, path)) }))
+    updateCourse(id, (c) => {
+      const fromFolder = !!c.folder && sameFile(dirname(path), c.folder)
+      const excluded = c.excluded ?? []
+      return {
+        ...c,
+        files: c.files.filter((f) => !sameFile(f, path)),
+        excluded: fromFolder && !excluded.some((x) => sameFile(x, path)) ? [...excluded, path] : excluded
+      }
+    })
+    return view()
+  })
+
+  // Listeden çıkarılan klasör sunularını geri getir
+  ipcMain.handle('library:restore-excluded', (_e, id: string) => {
+    updateCourse(id, (c) => syncFolder({ ...c, excluded: [] }))
     return view()
   })
 

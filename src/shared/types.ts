@@ -48,6 +48,8 @@ export type Course = {
   createdAt: number
   /** Sınıfı (Timetable.levels); varsa dersin rengi sınıfın rengidir */
   levelId?: string | null
+  /** Bağlı klasörde durduğu hâlde kullanıcının listeden çıkardığı sunular (taramada geri eklenmez) */
+  excluded?: string[]
 }
 
 /** Ders saati (okulun zil saatleri), ör. 08:30–09:20 */

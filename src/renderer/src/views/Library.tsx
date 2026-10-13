@@ -278,7 +278,17 @@ export default function Library({ onOpen, onSettings, error, onDismissError }: P
                   {course.folderMissing ? 'Klasöre ulaşılamıyor: ' : 'Bağlı klasör: '}
                   <strong>{course.folder}</strong>
                   {!course.folderMissing && ' — yeni eklenen sunular otomatik listelenir'}
+                  {!!course.excluded?.length && ` · ${course.excluded.length} sunu listeden çıkarıldı`}
                 </span>
+                {!!course.excluded?.length && (
+                  <button
+                    className="btn"
+                    title={course.excluded.map((p) => p.split(/[\\/]/).pop()).join('\n')}
+                    onClick={async () => setView(await window.api.library.restoreExcluded(course.id))}
+                  >
+                    Geri getir
+                  </button>
+                )}
                 <button
                   className="icon-btn"
                   title="Klasör bağlantısını kaldır (dosyalar listede kalır)"
@@ -334,7 +344,11 @@ export default function Library({ onOpen, onSettings, error, onDismissError }: P
                         </button>
                         <button
                           className="icon-btn"
-                          title="Dersten çıkar (dosya silinmez)"
+                          title={
+                            f.fromFolder
+                              ? 'Listeden çıkar (dosya klasörde kalır, silinmez; klasör çubuğundan geri getirilebilir)'
+                              : 'Dersten çıkar (dosya silinmez)'
+                          }
                           onClick={async (e) => {
                             e.stopPropagation()
                             setView(await window.api.library.removeFile(course.id, f.path))

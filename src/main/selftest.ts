@@ -615,6 +615,22 @@ Start-Sleep -Milliseconds 150; [void][M]::SetCursorPos($old.X, $old.Y)`
     }
     check('bağlı klasöre eklenen sunu listede kendiliğinden göründü', appeared)
 
+    // Bağlı klasördeki sunuyu X ile listeden çıkar: klasörde durduğu hâlde tarama onu geri eklememeli; "Geri getir" ile döner
+    await js(`(() => {
+      const row = [...document.querySelectorAll('.file-row')].find((r) => r.querySelector('.file-row__name').textContent === 'Hafta 11')
+      row.querySelector('button[title^="Listeden çıkar"]').click()
+      return true
+    })()`)
+    await sleep(400)
+    main.webContents.send('library:changed', libraryView()) // klasör taraması (izleyici/odak) yeniden çalışsın
+    await sleep(300)
+    const removed = !(await rowVisible('Hafta 11')) && !(await order()).includes('Hafta 11')
+    const chip = await js<string>(`document.querySelector('.folder-chip')?.textContent ?? ''`)
+    check('klasördeki sunu listeden çıkarıldı, taramada geri gelmedi', removed && chip.includes('1 sunu listeden çıkarıldı'), { chip })
+    await clickButton('Geri getir')
+    await sleep(500)
+    check('"Geri getir" ile listeye döndü', (await rowVisible('Hafta 11')) && (await order()).includes('Hafta 11'), await order())
+
     // Klasörü bağlı olmayan, sunuları tek klasörde olan ders: "Klasörü bağla" önerisi → tek tıkla bağlanır
     const vS = await js<View>(`window.api.library.createCourse('Klasörsüz Ders', '#ff9800')`)
     const loneId = vS.courses[vS.courses.length - 1].id
