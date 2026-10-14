@@ -48,8 +48,33 @@ export function setPresented(paths: string[], on: boolean): void {
   if (changed) file.set({ ...data, presented })
 }
 
+// ---------- Kişisel notlar (Sunu Pro'da; PowerPoint dosyasına yazılmaz) ----------
+
+type NotesData = Record<string, { path: string; slides: Record<string, string> }>
+
+const notesFile = new JsonFile<NotesData>('notes.json', () => ({}))
+
+/** Dosyanın kişisel notları: slayt anahtarı → metin */
+export function getMyNotes(path: string): Record<string, string> {
+  return { ...(notesFile.get()[keyOf(path)]?.slides ?? {}) }
+}
+
+/** Boş metin notu siler */
+export function setMyNote(path: string, slideKey: string, text: string): void {
+  const data = notesFile.get()
+  const entry = data[keyOf(path)] ?? { path, slides: {} }
+  const slides = { ...entry.slides }
+  if (text.trim()) slides[slideKey] = text
+  else delete slides[slideKey]
+  const next = { ...data }
+  if (Object.keys(slides).length) next[keyOf(path)] = { path, slides }
+  else delete next[keyOf(path)]
+  notesFile.set(next)
+}
+
 export function flushSessions(): void {
   file.flush()
+  notesFile.flush()
 }
 
 // ---------- Çizimleri dosya bazında saklama (ayar açıksa) ----------

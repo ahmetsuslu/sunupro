@@ -3,7 +3,7 @@ import { randomUUID } from 'crypto'
 import { existsSync, readdirSync, statSync, watch, type FSWatcher } from 'fs'
 import { basename, dirname, join } from 'path'
 import { JsonFile } from './json-file'
-import { getSession, loadInk, presentedAt, saveInk, setPresented } from './sessions'
+import { getSession, loadInk, presentedAt, saveInk, setMyNote, setPresented } from './sessions'
 import { friendlyError, isPrepared, show } from './show'
 import type { Course, FileStatus, InkMap, LibraryCourse, LibraryFile, LibraryView, Timetable } from '../shared/types'
 import { defaultTimetable, sanitizeTimetable } from '../shared/timetable'
@@ -367,6 +367,7 @@ export function registerLibrary(getMain: () => BrowserWindow | null): void {
     return view()
   })
 
+  ipcMain.handle('notes:set', (_e, path: string, slideKey: string, text: string) => setMyNote(path, slideKey, text))
   ipcMain.handle('ink:load', (_e, path: string): InkMap | null => loadInk(path))
   ipcMain.handle('ink:save', (_e, path: string, ink: InkMap) => saveInk(path, ink))
 }

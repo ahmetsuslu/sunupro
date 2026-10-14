@@ -56,6 +56,9 @@ PowerPoint'in sunucu görünümünde ders anlatırken eksik kalan noktalar için
 - **Prova:** derse girmeden önce sunuyu evde çalışmak için "Prova" ile aç; gösteri, notlar, süre ve
   işaretçiler aynen çalışır ama kaldığın yer ve "sunuldu" işareti değişmez, provadaki çizimler saklanmaz.
   Sunucu ekranında PROVA rozeti görünür.
+- **Kişisel notlar:** notlar panelinde "✎ Not ekle" ile her slayta kendi notunu ekle (provada ve derste);
+  Sunu Pro'da saklanır, PowerPoint dosyası değişmez, projeksiyonda görünmez. Slayt eklenip silinse de not
+  doğru slaytta kalır.
 - **Sunuldu takibi:** son slayta gelinen sunu kendiliğinden "sunuldu" olarak işaretlenir; ✓ ile elle
   işaretlenir ya da kaldırılır (Shift+✓ üsttekilerle birlikte işaretler). Derste sıradaki sunu vurgulanır.
 - **Ara modu (`A`):** projeksiyonda geri sayım ve dönüş saati, süre sayacı durur. Sunum boyunca ekran

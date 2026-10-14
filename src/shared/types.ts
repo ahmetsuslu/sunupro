@@ -3,6 +3,8 @@ import type { ShortcutOverrides } from './shortcuts'
 
 export type SlideInfo = {
   index: number
+  /** PowerPoint'in kalıcı slayt kimliği (slayt eklenip silinse de değişmez) */
+  id?: number
   title: string
   notes: string
   hidden: boolean
@@ -27,6 +29,8 @@ export type PresentationInfo = {
   session: FileSession | null
   /** Prova: sunu oynatılır ama kaldığın yer ve sunuldu işareti değişmez, çizimler saklanmaz */
   rehearsal: boolean
+  /** Kullanıcının Sunu Pro'da eklediği kişisel notlar: slayt anahtarı (kimlik ya da #sıra) → metin */
+  myNotes: Record<string, string>
 }
 
 /** Kaldığın yerden devam: dosya başına son konum */

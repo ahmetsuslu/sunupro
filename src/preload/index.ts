@@ -61,6 +61,10 @@ const api = {
       ipcRenderer.invoke('library:set-presented', paths, presented),
     onChange: (cb: (view: LibraryView) => void): (() => void) => sub('library:changed', cb)
   },
+  /** Kişisel notlar (Sunu Pro'da saklanır; boş metin notu siler) */
+  myNotes: {
+    set: (path: string, slideKey: string, text: string): Promise<void> => ipcRenderer.invoke('notes:set', path, slideKey, text)
+  },
   ink: {
     load: (path: string): Promise<InkMap | null> => ipcRenderer.invoke('ink:load', path),
     save: (path: string, ink: InkMap): Promise<void> => ipcRenderer.invoke('ink:save', path, ink)

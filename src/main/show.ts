@@ -18,7 +18,7 @@ import { PptError, ppt } from './pptctl'
 import { physicalCenter, pickAudienceDisplay, pickPresenterDisplay } from './displays'
 import { connectPorts, createOverlayWindow, fitToDisplay } from './windows'
 import { loadSettings, saveSettings } from './store'
-import { getSession, saveSession, setPresented } from './sessions'
+import { getMyNotes, getSession, saveSession, setPresented } from './sessions'
 import { log } from './log'
 import {
   ShowScreen,
@@ -119,7 +119,7 @@ function cacheKeyFor(path: string): string {
   return createHash('sha1').update(`${path.toLowerCase()}|${st.size}|${st.mtimeMs}`).digest('hex').slice(0, 16)
 }
 
-type OpenResult = Omit<PresentationInfo, 'name' | 'cacheKey' | 'session' | 'rehearsal'>
+type OpenResult = Omit<PresentationInfo, 'name' | 'cacheKey' | 'session' | 'rehearsal' | 'myNotes'>
 
 /** Dosyanın slayt görselleri güncel biçimde önbellekte mi (sunu açılmadan, dosya bilgisinden) */
 export function isPrepared(path: string): boolean {
@@ -199,7 +199,8 @@ class ShowController {
       cacheKey,
       openedCopy: !!info.openedCopy,
       session: getSession(path),
-      rehearsal: !!opts.rehearsal
+      rehearsal: !!opts.rehearsal,
+      myNotes: getMyNotes(path)
     }
     return this.presentation
   }

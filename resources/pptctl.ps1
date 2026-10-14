@@ -157,6 +157,7 @@ function Get-SlideInfo($s) {
   } catch {}
   return @{
     index  = [int]$s.SlideIndex
+    id     = [int]$s.SlideID  # slayt eklenip silinse de değişmez (kişisel notlar buna bağlanır)
     title  = (Normalize-Text $title)
     notes  = (Normalize-Text $notes)
     hidden = ($s.SlideShowTransition.Hidden -eq -1)

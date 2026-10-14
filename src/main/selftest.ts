@@ -7,6 +7,7 @@ import { ppt } from './pptctl'
 import { cacheRoot, friendlyError, show } from './show'
 import { physicalCenter } from './displays'
 import { libraryView } from './library'
+import { getMyNotes } from './sessions'
 import { loadSettings, saveSettings } from './store'
 
 /**
@@ -772,6 +773,27 @@ Start-Sleep -Milliseconds 150; [void][M]::SetCursorPos($old.X, $old.Y)`
     await sleep(800)
     check('açılışta "kaldığın yerden devam" önerisi', await js<boolean>(`document.body.innerText.includes('üzerinde kalmıştın')`))
     await shot('h1-devam-onerisi', 'presenter')
+
+    // Kişisel not: "Not ekle" → yaz → Bitti; PowerPoint'in slayt kimliğine bağlı olarak Sunu Pro'da saklanır
+    const NOTE = 'Prova notu: burada sahadan örnek ver'
+    await clickButton('Not ekle')
+    await sleep(250)
+    await js(`(() => {
+      const t = document.querySelector('.my-note__input')
+      Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set.call(t, ${JSON.stringify(NOTE)})
+      t.dispatchEvent(new Event('input', { bubbles: true }))
+      return true
+    })()`)
+    await clickButton('Bitti')
+    await sleep(700)
+    const savedNotes = getMyNotes(show.presentation!.path)
+    const noteKeys = Object.keys(savedNotes).filter((k) => savedNotes[k] === NOTE)
+    check(
+      'kişisel not eklendi: panelde görünüyor, slayt kimliğiyle saklandı',
+      (await js<string>(`document.querySelector('.my-note')?.textContent ?? ''`)).includes(NOTE) && noteKeys.length === 1 && /^\d+$/.test(noteKeys[0]),
+      { savedNotes }
+    )
+    await shot('h1b-kisisel-not', 'presenter')
     await clickButton('Kaldığın yerden devam')
     await waitFor(() => show.state.running, 8000)
     await sleep(800)
@@ -813,6 +835,7 @@ Start-Sleep -Milliseconds 150; [void][M]::SetCursorPos($old.X, $old.Y)`
     await js(`[...document.querySelectorAll('.file-row')].find((r) => r.textContent.includes('ornek-sunu')).click()`)
     await waitFor(() => show.presentation?.name === 'ornek-sunu.pptx', 15000)
     await sleep(1500)
+    check('kişisel not kapatıp açınca yerinde', Object.values(show.presentation?.myNotes ?? {}).includes(NOTE), show.presentation?.myNotes)
     // I — Ayarlar: kısayol atama, çakışma taşıma, zorunlu tuş koruması, varsayılana dönüş, güncelleme
     const shortcuts = (): Promise<Record<string, string[]>> => js(`window.api.settings.get().then((s) => s.shortcuts)`)
     const rowButton = (label: string, text: string): Promise<boolean> =>

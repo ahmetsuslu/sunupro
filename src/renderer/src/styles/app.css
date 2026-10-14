@@ -485,6 +485,48 @@ kbd {
   user-select: text;
   padding-right: 4px;
 }
+/* Kişisel not (Sunu Pro'da saklanır): PowerPoint notlarından ayrışsın */
+.my-note {
+  margin-top: 12px;
+  padding: 8px 12px 10px;
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--warn) 9%, var(--bg-panel));
+  box-shadow: inset 3px 0 0 var(--warn);
+  cursor: text;
+}
+.my-note__label {
+  margin-bottom: 2px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--warn);
+}
+.my-note__input {
+  display: block;
+  width: 100%;
+  font: inherit;
+  line-height: 1.5;
+  color: var(--text-primary);
+  background: var(--bg-app);
+  border: 1px solid var(--warn);
+  border-radius: var(--radius-sm);
+  padding: 6px 8px;
+  resize: vertical;
+  outline: none;
+  user-select: text;
+}
+.my-note__actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 6px;
+  font-size: 12px;
+}
+.my-note__edit {
+  white-space: nowrap;
+}
 
 /* Slayt ızgarası */
 .grid-overlay,
